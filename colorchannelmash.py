@@ -1,9 +1,38 @@
 import cv2
 import os
 import random
-import numpy as np  # Add this line to import NumPy
+import numpy as np
 
-def combine_frames_and_write_video(output_path, source_paths, fps, width, height, duration_seconds=10):
+def resize_frame(frame, target_width, target_height):
+    current_height, current_width = frame.shape[:2]
+
+    # Calculate the aspect ratio
+    aspect_ratio = current_width / float(current_height)
+
+    # Calculate new dimensions to maintain the aspect ratio
+    if current_width > current_height:
+        new_width = target_width
+        new_height = int(target_width / aspect_ratio)
+    else:
+        new_height = target_height
+        new_width = int(target_height * aspect_ratio)
+
+    # Resize the frame
+    resized_frame = cv2.resize(frame, (new_width, new_height))
+
+    # Create an empty canvas of the target size
+    canvas = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+
+    # Calculate the position to paste the resized frame in the center of the canvas
+    y_offset = (target_height - new_height) // 2
+    x_offset = (target_width - new_width) // 2
+
+    # Paste the resized frame onto the canvas
+    canvas[y_offset:y_offset + new_height, x_offset:x_offset + new_width] = resized_frame
+
+    return canvas
+
+def combine_frames_and_write_video(output_path, source_paths, fps, width, height, duration_seconds=60):
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height), isColor=True)
 
@@ -35,9 +64,12 @@ def combine_frames_and_write_video(output_path, source_paths, fps, width, height
                 print(f"Error reading frame from {source_path}")
                 continue
 
+            # Resize the frame while maintaining the aspect ratio
+            resized_frame = resize_frame(frame, width, height)
+
             # Randomly select a color channel and assign it to the combined frame
             channel_index = random.randint(0, 2)
-            combined_frame[:, :, i] = frame[:, :, channel_index]
+            combined_frame[:, :, i] = resized_frame[:, :, channel_index]
 
         writer.write(combined_frame)
 
