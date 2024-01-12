@@ -41,12 +41,12 @@ def combine_frames_and_write_video(output_path, source_paths, fps, width, height
 
     for _ in range(frames_needed):
         # Randomly select three source videos
-        selected_sources = random.sample(source_paths, 3)
+        selected_source = random.sample(source_paths, 3)
 
         # Initialize an empty frame
         combined_frame = np.zeros((height, width, 3), dtype=np.uint8)
 
-        for i, source_path in enumerate(selected_sources):
+        for i, source_path in enumerate(selected_source):
             cap = cv2.VideoCapture(source_path)
 
             if not cap.isOpened():
@@ -76,13 +76,13 @@ def combine_frames_and_write_video(output_path, source_paths, fps, width, height
     writer.release()
 
 def main():
-    source_directory = 'sources'
+    source_directory = 'source'
     output_path = 'output_video.avi'
 
     video_paths = [os.path.join(source_directory, file) for file in os.listdir(source_directory) if file.endswith(('.mov', '.avi'))]
 
     if not video_paths:
-        print("No video files found in the 'sources' directory.")
+        print("No video files found in the 'source' directory.")
         return
 
     # Choose the video with the highest resolution as the reference for width and height
