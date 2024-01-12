@@ -2,6 +2,7 @@ import cv2
 import os
 import random
 import numpy as np
+from osxphotos import PhotosDB
 
 def resize_frame(frame, target_width, target_height):
     current_height, current_width = frame.shape[:2]
@@ -41,12 +42,16 @@ def combine_frames_and_write_video(output_path, source_paths, fps, width, height
 
     for _ in range(frames_needed):
         # Randomly select three source videos
-        selected_source = random.sample(source_paths, 3)
+        selected_sources = random.sample(source_paths, 3)
 
         # Initialize an empty frame
         combined_frame = np.zeros((height, width, 3), dtype=np.uint8)
 
-        for i, source_path in enumerate(selected_source):
+        for i, source_path in enumerate(selected_sources):
+            if not os.path.exists(source_path):
+                print(f"File not found: {source_path}")
+                continue
+
             cap = cv2.VideoCapture(source_path)
 
             if not cap.isOpened():
@@ -76,22 +81,29 @@ def combine_frames_and_write_video(output_path, source_paths, fps, width, height
     writer.release()
 
 def main():
-    source_directory = 'source'
-    output_path = 'output_video.avi'
+    # Replace 'path_to_your_photos_library' with the path to your Photos library
+    photosdb = PhotosDB(osxphotos.utils.get_last_library_path())
 
-    video_paths = [os.path.join(source_directory, file) for file in os.listdir(source_directory) if file.endswith(('.mov', '.avi'))]
+    # Get all original video file paths from the Photos library
+    source_paths = [photo.original_filename for photo in photosdb.photos(images=False, movies=True)]
 
-    if not video_paths:
-        print("No video files found in the 'source' directory.")
+    # Filter out non-existing files
+    source_paths = [path for path in source_paths if os.path.exists(path)]
+
+    if not source_paths:
+        print("No existing original video files found in the Photos library.")
         return
+
+    output_path = 'output_video.avi'
+    fps = 30  # Modify as needed
 
     # Choose the video with the highest resolution as the reference for width and height
     max_width = 0
     max_height = 0
-    for video_path in video_paths:
-        cap = cv2.VideoCapture(video_path)
+    for source_path in source_paths:
+        cap = cv2.VideoCapture(source_path)
         if not cap.isOpened():
-            print(f"Error: Could not open video {video_path}")
+            print(f"Error: Could not open video {source_path}")
             continue
 
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -104,9 +116,7 @@ def main():
 
         cap.release()
 
-    fps = 30  # Modify as needed
-
-    combine_frames_and_write_video(output_path, video_paths, fps, max_width, max_height)
+    combine_frames_and_write_video(output_path, source_paths, fps, max_width, max_height)
 
 if __name__ == "__main__":
     main()
