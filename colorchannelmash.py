@@ -3,6 +3,13 @@ import os
 import random
 import numpy as np
 
+# colorchannelmash.py
+#
+# Utilizes the OpenCV library to create a video montage by combining frames from multiple
+# source videos. The resulting video is a composition of randomly selected frames from three
+# input videos, each contributing a single color channel to the final frame. The videos are
+# resized to a common aspect ratio before being combined.
+
 def resize_frame(frame, target_width, target_height):
     current_height, current_width = frame.shape[:2]
 
