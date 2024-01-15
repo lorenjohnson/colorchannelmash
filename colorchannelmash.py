@@ -4,6 +4,7 @@ import cv2
 import os
 import random
 import numpy as np
+# import keyboard
 
 # colorchannelmash.py
 #
@@ -22,6 +23,8 @@ def parse_args():
     parser.add_argument("--height", type=int, default=2688, help="Output video height. Optional, defaults to iPhone 11 Pro Max screen height.")
     parser.add_argument("--outputDir", default="output", help="Output directory for set files. Optional, defaults to 'output'.")
     parser.add_argument("--fps", type=int, default=30, help="Frames per second for output videos. Optional, defaults to 30.")
+    parser.add_argument("--colorSpace", choices=['hsv', 'hls', 'bgr', 'yuv'], default='bgr',
+                        help="Color space for displaying and combining frames. Options: hsv, hls, rgb, yuv. Optional, defaults to bgr.")
     return parser.parse_args()
 
 def resize_frame(frame, target_width, target_height):
@@ -40,7 +43,7 @@ def resize_frame(frame, target_width, target_height):
 
     return canvas
 
-def display_video_selection(selected_source, channel_indices, width, height, color_space=cv2.COLOR_BGR2HLS):
+def display_video_selection(selected_source, channel_indices, width, height, color_space):
     combined_frame = np.zeros((height, width, 3), dtype=np.uint8)
 
     current_frame_positions = []
@@ -63,18 +66,25 @@ def display_video_selection(selected_source, channel_indices, width, height, col
             continue
 
         resized_frame = resize_frame(frame, width, height)
-        converted_frame = cv2.cvtColor(resized_frame, color_space)
+        
+        # Check if the color space is BGR
+        if color_space.lower() == 'bgr':
+            converted_frame = resized_frame
+        else:
+            # Convert to the specified color space
+            converted_frame = cv2.cvtColor(resized_frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
+
         combined_frame[:, :, i] = converted_frame[:, :, channel_index]
 
     # Display the frame in real-time
-    print("Press 'Enter' to accept the selection or 'Esc' to reject.")
+    print("Press 'Enter' to accept the selection, 'Esc' to pause rendering, or 'Q' to exit.")
     cv2.imshow("Video Selection", combined_frame)
     key = cv2.waitKey(0)
     cv2.destroyAllWindows()
 
     return key == 13, current_frame_positions  # Return True if 'Enter' key is pressed, False otherwise
 
-def combine_frames_and_write_video(output_path, selected_source, channel_indices, args, confirmation_frame_positions, color_space=cv2.COLOR_BGR2HLS):
+def combine_frames_and_write_video(output_path, selected_source, channel_indices, args, confirmation_frame_positions, color_space):
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
 
     writer = cv2.VideoWriter(output_path, fourcc, args.fps, (args.width, args.height), isColor=True)
@@ -104,7 +114,12 @@ def combine_frames_and_write_video(output_path, selected_source, channel_indices
                 continue
 
             resized_frame = resize_frame(frame, args.width, args.height)
-            converted_frame = cv2.cvtColor(resized_frame, color_space)
+
+            if color_space.lower() == 'bgr':
+                converted_frame = resized_frame
+            else:
+                converted_frame = cv2.cvtColor(resized_frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
+
             combined_frame[:, :, i] = converted_frame[:, :, channel_index]
 
             current_frame_positions[i] += 1
@@ -114,12 +129,28 @@ def combine_frames_and_write_video(output_path, selected_source, channel_indices
         key = cv2.waitKey(1)  # Wait for a short period (1 millisecond) to update the display
 
         if key == 27:  # 'Esc' key
-            print("Set rejected. Starting a new set.")
-            break
+            pause_key = pause_rendering_menu()
+            if pause_key == 8:  # 'Backspace' key
+                print("Set stopped and video deleted.")
+                os.remove(output_path)
+                return
+            elif pause_key == 27:  # 'Esc' key
+                print("Set stopped and video kept.")
+                break
+            # Continue rendering for any other key
 
         writer.write(combined_frame)
 
     writer.release()
+
+def pause_rendering_menu():
+    print("Rendering paused. Choose an option:")
+    print("1. Stop and delete video (Backspace)")
+    print("2. Stop and keep video (Esc)")
+    print("3. Continue rendering (Any other key)")
+    key = cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    return key
 
 def main():
     args = parse_args()
@@ -141,11 +172,11 @@ def main():
             selected_source = random.sample(source_paths, 3)
             channel_indices = [random.randint(0, 2) for _ in range(3)]
 
-            confirmation_result, confirmation_frame_positions = display_video_selection(selected_source, channel_indices, args.width, args.height)
+            confirmation_result, confirmation_frame_positions = display_video_selection(selected_source, channel_indices, args.width, args.height, args.colorSpace)
 
             if confirmation_result:
                 print("Set accepted. Generating video set.")
-                combine_frames_and_write_video(output_path, selected_source, channel_indices, args, confirmation_frame_positions)
+                combine_frames_and_write_video(output_path, selected_source, channel_indices, args, confirmation_frame_positions, args.colorSpace)
                 break
 
 if __name__ == "__main__":
