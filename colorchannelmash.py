@@ -26,9 +26,11 @@ def resize_frame(frame, target_width, target_height):
     # Calculate the position to paste the resized frame in the center of the canvas
     y_offset = (target_height - new_height) // 2
     x_offset = (target_width - new_width) // 2
-
-    # Paste the resized frame onto the canvas
-    canvas[y_offset:y_offset + new_height, x_offset:x_offset + new_width] = resized_frame
+    try:
+      # Paste the resized frame onto the canvas
+      canvas[y_offset:y_offset + new_height, x_offset:x_offset + new_width] = resized_frame
+    except:
+      canvas = np.zeros((target_height, target_width, 3), dtype=np.uint8)
 
     return canvas
 
@@ -76,10 +78,10 @@ def combine_frames_and_write_video(output_path, source_paths, fps, width, height
     writer.release()
 
 def main():
-    source_directory = 'source'
+    source_directory = '/Volumes/spareroom/temp'
     output_path = 'output_video.avi'
 
-    video_paths = [os.path.join(source_directory, file) for file in os.listdir(source_directory) if file.endswith(('.mov', '.avi'))]
+    video_paths = [os.path.join(source_directory, file) for file in os.listdir(source_directory) if file.endswith(('.mov', 'mp4', '.avi'))]
 
     if not video_paths:
         print("No video files found in the 'source' directory.")
