@@ -237,8 +237,9 @@ def main():
 
         # Save metadata for the video set
         if success:
+            absolute_source_paths = [os.path.abspath(path) for path in selected_source_paths]
             metadata = {
-                "source_paths": ",".join(selected_source_paths),
+                "source_paths": ",".join(absolute_source_paths),
                 "channel_indices": ",".join(map(str, source_channel_indices)),
                 "starting_frames": ",".join(map(str, source_starting_frames)),
                 "run_params": vars(args),
