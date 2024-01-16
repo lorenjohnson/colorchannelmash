@@ -36,9 +36,6 @@ def parse_args():
     parser.add_argument("--fps", type=int, default=30, help="Frames per second for output videos. Optional, defaults to 30.")
     return parser.parse_args()
 
-import cv2
-import numpy as np
-
 def resize_and_crop_frame(frame, target_height, target_width, rotate_fit=False):
     try:
         # Get frame dimensions
