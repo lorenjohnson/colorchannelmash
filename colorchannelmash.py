@@ -4,14 +4,23 @@ import cv2
 import os
 import random
 import numpy as np
-# import keyboard
 
-# colorchannelmash.py
-#
-# Utilizes the OpenCV library to create a video montage by combining frames from multiple
-# source videos. The resulting video is a composition of randomly selected frames from three
-# input videos, each contributing a single color channel to the final frame. The videos are
-# resized to a common aspect ratio before being combined.
+# Video montage generation tool written in Python. Combines frames from three different sources to create composite videos.
+# Customize parameters like source videos, output directory, set duration, number of sets, video dimensions, color space,
+# and frames per second using command line arguments.
+
+# Uses OpenCV for video processing. Provides real-time preview during frame selection. Generated video sets are saved in the
+# specified output directory with filenames like "set-001.avi", "set-002.avi," etc.
+
+# Includes functionality to pause rendering with options to stop and delete the video or stop and keep the video. 
+
+# Usage:
+# python colorchannelmash.py [<sourceGlob>] [--outputDir OUTPUTDIR] [--setLength SETLENGTH] [--numSets NUMSETS]
+#                             [--width WIDTH] [--height HEIGHT] [--colorSpace {hsv,hls,bgr,yuv}] [--fps FPS]
+
+# Example:
+# python colorchannelmash.py source/*.mov --outputDir output --setLength 10 --numSets 5 --width 1242 --height 2688
+#                               --colorSpace bgr --fps 30
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Video montage script with command line parameters.")
