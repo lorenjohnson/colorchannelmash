@@ -17,14 +17,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Video montage script with command line parameters.")
     parser.add_argument("sourceGlob", nargs='?', default="source/*.(mov|avi|mp4)",
                         help="File path glob for source videos (e.g., source/*.mov). Optional, defaults to 'source/*.(mov|avi|mp4)'.")
-    parser.add_argument("--numSets", type=int, default=1, help="Total number of sets to generate. Optional, defaults to 1.")
+    parser.add_argument("--outputDir", default="output", help="Output directory for set files. Optional, defaults to 'output'.")
     parser.add_argument("--setLength", type=int, default=10, help="Duration of each set in seconds. Optional, defaults to 10 seconds.")
+    parser.add_argument("--numSets", type=int, default=1, help="Total number of sets to generate. Optional, defaults to 1.")
     parser.add_argument("--width", type=int, default=1242, help="Output video width. Optional, defaults to iPhone 11 Pro Max screen width.")
     parser.add_argument("--height", type=int, default=2688, help="Output video height. Optional, defaults to iPhone 11 Pro Max screen height.")
-    parser.add_argument("--outputDir", default="output", help="Output directory for set files. Optional, defaults to 'output'.")
-    parser.add_argument("--fps", type=int, default=30, help="Frames per second for output videos. Optional, defaults to 30.")
     parser.add_argument("--colorSpace", choices=['hsv', 'hls', 'bgr', 'yuv'], default='bgr',
-                        help="Color space for displaying and combining frames. Options: hsv, hls, rgb, yuv. Optional, defaults to bgr.")
+                        help="Color space for displaying and combining frames. Options: hsv, hls, bgr, yuv. Optional, defaults to bgr.")
+    parser.add_argument("--fps", type=int, default=30, help="Frames per second for output videos. Optional, defaults to 30.")
     return parser.parse_args()
 
 def resize_frame(frame, target_width, target_height):
@@ -77,7 +77,7 @@ def display_video_selection(selected_source, channel_indices, width, height, col
         combined_frame[:, :, i] = converted_frame[:, :, channel_index]
 
     # Display the frame in real-time
-    print("Press 'Enter' to accept the selection, 'Esc' to pause rendering, or 'Q' to exit.")
+    print("Press 'Enter' to begin generating this selection, Esc (or any other key) to skip.")
     cv2.imshow("Video Selection", combined_frame)
     key = cv2.waitKey(0)
     cv2.destroyAllWindows()
@@ -126,28 +126,29 @@ def combine_frames_and_write_video(output_path, selected_source, channel_indices
 
         # Display the frame in real-time
         cv2.imshow("Video Rendering", combined_frame)
-        key = cv2.waitKey(1)  # Wait for a short period (1 millisecond) to update the display
+        # Wait for a short period (1 millisecond) to update the display
+        # 0xFF is used to get the least significant byte
+        key = cv2.waitKey(1)
 
-        if key == 27:  # 'Esc' key
+        if key == 27: # 'Esc' key
             pause_key = pause_rendering_menu()
-            if pause_key == 8:  # 'Backspace' key
-                print("Set stopped and video deleted.")
+            if pause_key == 27:  # 'Esc' key
+                print("Generation stopped and video deleted.")
                 os.remove(output_path)
                 return
-            elif pause_key == 27:  # 'Esc' key
-                print("Set stopped and video kept.")
+            elif pause_key == ord('k'):
+                print("Generation stopped and video kept.")
                 break
             # Continue rendering for any other key
-
         writer.write(combined_frame)
 
     writer.release()
 
 def pause_rendering_menu():
     print("Rendering paused. Choose an option:")
-    print("1. Stop and delete video (Backspace)")
-    print("2. Stop and keep video (Esc)")
-    print("3. Continue rendering (Any other key)")
+    print("1. Stop and delete video (Esc)")
+    print("2. Stop and keep video (k)")
+    print("3. Continue generating (Any other key)")
     key = cv2.waitKey(0)
     cv2.destroyAllWindows()
     return key
