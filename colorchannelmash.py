@@ -144,6 +144,9 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
 
     current_frame_positions = source_starting_frames.copy()
 
+    print("(Esc) Stop and delete video, keep generating sets")
+    print("(k) Stop and keep video")
+
     for _ in range(frames_per_set):
         combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8) if is_color else np.zeros((args.height, args.width), dtype=np.uint8)
 
@@ -180,16 +183,16 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
         # Wait for a short period (1 millisecond) to update the display
         key = cv2.waitKey(1)
 
+        # if key == 27:  # 'Esc' key
+        # key = pause_rendering_menu()
         if key == 27:  # 'Esc' key
-            pause_key = pause_rendering_menu()
-            if pause_key == 27:  # 'Esc' key
-                print("Generation stopped, video deleted.")
-                os.remove(output_path)
-                return False
-            elif pause_key == ord('k'):
-                print(f"Generation stopped, {output_path} saved.")
-                break
-            # Continue rendering for any other key
+            print("Generation stopped, video deleted.")
+            os.remove(output_path)
+            return False
+        elif key == ord('k'):
+            print(f"Generation stopped, {output_path} saved.")
+            break
+        # Continue rendering for any other key
 
         writer.write(combined_frame)
     writer.release()
@@ -218,11 +221,17 @@ def main():
     if existing_sets:
         max_set_number = max(int(s.split('-')[1].split('.')[0]) for s in existing_sets)
 
+    set_number = max_set_number + 1
 
-    for set_number in range(max_set_number + 1, max_set_number + 1 + args.numSets):
+    while set_number <= max_set_number + args.numSets:
         output_path = os.path.join(args.outputDir, f"set-{set_number:03d}.mp4")
 
         # Randomly select source videos and channel indices
+        # TODO: Add option to prompt user with a imview of the first frame of a randomly selected source
+        # which they can choose to use or not, in which case it will present them with another randomly 
+        # selected source. Do this for all 3 files. It should only work with way if a '--selectSources'
+        # CLI param is true (false by default), otherwise it does what it does now and selects 3 sources
+        # at random without prompting.
         selected_source_paths = random.sample(source_paths, 3)
         source_channel_indices = [random.randint(0, 2) for _ in range(3)]
 
@@ -232,11 +241,16 @@ def main():
         # Generate video set without confirmation
         print(f"Generating video set {set_number}...")
         success = combine_frames_and_write_video(
-            output_path, selected_source_paths, source_channel_indices, source_starting_frames, args
+            output_path,
+            selected_source_paths,
+            source_channel_indices,
+            source_starting_frames,
+            args
         )
 
         # Save metadata for the video set
         if success:
+            set_number += 1
             absolute_source_paths = [os.path.abspath(path) for path in selected_source_paths]
             metadata = {
                 "source_paths": ",".join(absolute_source_paths),
