@@ -1,9 +1,15 @@
-import argparse
-import glob
-import cv2
+from __init__ import __version__
+from typing import Dict
+from pathlib import Path
 import os
+import subprocess
+import glob
 import random
+import argparse
+import shlex
 import numpy as np
+import ffmpeg
+import cv2
 
 # Video montage generation tool written in Python. Combines frames from three different sources to create composite videos.
 # Customize parameters like source videos, output directory, set duration, number of sets, video dimensions, color space,
@@ -86,6 +92,45 @@ def resize_and_crop_frame(frame, target_height, target_width, rotate_fit=False):
         print(f"Error: {e}")
         return np.zeros((target_height, target_width, 3), dtype=np.uint8)
 
+def add_metadata(video: Path, meta: Dict[str, str], overwrite: bool = True):
+    # Check if ffmpeg is installed
+    try:
+        subprocess.run(['ffmpeg', '-version'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("ffmpeg not found. Please install ffmpeg.") from e
+
+    save_path = video.with_suffix('.metadata' + video.suffix)
+
+    metadata_args = []
+    for k, v in meta.items():
+        metadata_args.extend(['-metadata', f'{k}={v}'])
+
+    args = [
+        'ffmpeg',
+        '-v', 'quiet',
+        '-i', shlex.quote(str(video.absolute())),
+        '-movflags', 'use_metadata_tags',
+        '-map_metadata', '0',
+        *metadata_args,
+        '-c', 'copy',
+        shlex.quote(str(save_path))
+    ]
+
+    if overwrite:
+        args.append('-y')
+
+    try:
+        # Run ffmpeg command
+        subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # Replace the original file with the new one
+        os.replace(save_path, video)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Error running ffmpeg: {e.stderr.decode()}") from e
+    finally:
+        # Delete the save file if it still exists
+        if os.path.exists(save_path):
+            os.remove(save_path)
+
 def combine_frames_and_write_video(output_path, source_paths, source_channel_indices, source_starting_frames, args):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
@@ -142,7 +187,7 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
                 os.remove(output_path)
                 return False
             elif pause_key == ord('k'):
-                print("Generation stopped, video saved.")
+                print(f"Generation stopped, {output_path} saved.")
                 break
             # Continue rendering for any other key
 
@@ -173,6 +218,7 @@ def main():
     if existing_sets:
         max_set_number = max(int(s.split('-')[1].split('.')[0]) for s in existing_sets)
 
+
     for set_number in range(max_set_number + 1, max_set_number + 1 + args.numSets):
         output_path = os.path.join(args.outputDir, f"set-{set_number:03d}.mp4")
 
@@ -181,13 +227,24 @@ def main():
         source_channel_indices = [random.randint(0, 2) for _ in range(3)]
 
         # Get random initial frame positions for each source video
-        source_starting_frames = [random.randint(0, int(cv2.VideoCapture(src).get(cv2.CAP_PROP_FRAME_COUNT)) - 1) for src in source_paths]
+        source_starting_frames = [random.randint(0, int(cv2.VideoCapture(src).get(cv2.CAP_PROP_FRAME_COUNT)) - 1) for src in selected_source_paths]
 
         # Generate video set without confirmation
         print(f"Generating video set {set_number}...")
-        combine_frames_and_write_video(
+        success = combine_frames_and_write_video(
             output_path, selected_source_paths, source_channel_indices, source_starting_frames, args
         )
+
+        # Save metadata for the video set
+        if success:
+            metadata = {
+                "source_paths": ",".join(selected_source_paths),
+                "channel_indices": ",".join(map(str, source_channel_indices)),
+                "starting_frames": ",".join(map(str, source_starting_frames)),
+                "run_params": vars(args),
+                "script_version": __version__ if '__version__' in globals() else "Unknown"
+            }
+            add_metadata(Path(output_path), metadata)
 
 if __name__ == "__main__":
     main()
