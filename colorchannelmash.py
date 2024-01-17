@@ -187,12 +187,10 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
                 channel_range = channel_max - channel_min
 
                 # Adjust the contrast reduction factor based on the dynamic range
-                contrast_reduction_factor = 75 / (channel_range + 1e-10)  # Adding a small value to avoid division by zero
+                contrast_reduction_factor = 50 / (channel_range + 1e-10)  # Adding a small value to avoid division by zero
 
                 # Reduce contrast on the grayscale channel before adding to the combined frame
                 combined_frame[:, :] += np.clip(contrast_reduction_factor * resized_frame[:, :, channel_index], 0, 255).astype(np.uint8)
-
-                # combined_frame[:, :] += np.clip(0.3 * resized_frame[:, :, 0], 0, 255).astype(np.uint8)
 
             current_frame_positions[i] += 1
 
