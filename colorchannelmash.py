@@ -176,7 +176,10 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
                     converted_frame = cv2.cvtColor(resized_frame, getattr(cv2, f'COLOR_BGR2{args.colorSpace.upper()}'))
                 else:
                     converted_frame = resized_frame
-                combined_frame[:, :, i] = converted_frame[:, :, channel_index]
+                # Swap each source frame into different color channels
+                combined_frame[:, :, i % 3] = resized_frame[:, :, 0]
+                # Old version
+                # combined_frame[:, :, i] = converted_frame[:, :, channel_index]
             else:
                 # Calculate dynamic range of pixel values in the grayscale channel
                 channel_min = np.min(resized_frame[:, :, channel_index])
