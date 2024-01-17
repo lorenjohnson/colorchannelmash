@@ -131,6 +131,9 @@ def add_metadata(video: Path, meta: Dict[str, str], overwrite: bool = True):
         if os.path.exists(save_path):
             os.remove(save_path)
 
+class ExitException(Exception):
+    pass
+
 def combine_frames_and_write_video(output_path, source_paths, source_channel_indices, source_starting_frames, args):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
@@ -175,7 +178,18 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
                     converted_frame = resized_frame
                 combined_frame[:, :, i] = converted_frame[:, :, channel_index]
             else:
-                combined_frame[:, :] = resized_frame[:, :, 0]  # Grayscale, assign directly without indexing third dimension
+                # Calculate dynamic range of pixel values in the grayscale channel
+                channel_min = np.min(resized_frame[:, :, channel_index])
+                channel_max = np.max(resized_frame[:, :, channel_index])
+                channel_range = channel_max - channel_min
+
+                # Adjust the contrast reduction factor based on the dynamic range
+                contrast_reduction_factor = 75 / (channel_range + 1e-10)  # Adding a small value to avoid division by zero
+
+                # Reduce contrast on the grayscale channel before adding to the combined frame
+                combined_frame[:, :] += np.clip(contrast_reduction_factor * resized_frame[:, :, channel_index], 0, 255).astype(np.uint8)
+
+                # combined_frame[:, :] += np.clip(0.3 * resized_frame[:, :, 0], 0, 255).astype(np.uint8)
 
             current_frame_positions[i] += 1
 
@@ -183,15 +197,26 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
         # Wait for a short period (1 millisecond) to update the display
         key = cv2.waitKey(1)
 
-        # if key == 27:  # 'Esc' key
-        # key = pause_rendering_menu()
-        if key == 27:  # 'Esc' key
-            print("Generation stopped, video deleted.")
-            os.remove(output_path)
+        if key ==  ord('d'):
+            print("Generation stopped", end="")
+            if os.path.exists(output_path):
+                os.remove(output_path)
+                print(f", {output_path} discarded")
+            else:
+                print("")
             return False
         elif key == ord('k'):
             print(f"Generation stopped, {output_path} saved.")
             break
+        elif key == 27: # `Esc` key
+            pause_key = pause_rendering_menu()
+            if pause_key in [ord('d'), 27]:
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                    print(f"{output_path} discarded")
+                raise ExitException
+            elif pause_key == ord('k'):
+                raise ExitException
         # Continue rendering for any other key
 
         writer.write(combined_frame)
@@ -200,11 +225,11 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
 
 def pause_rendering_menu():
     print("Rendering paused. Choose an option:")
-    print("1. Stop and delete video (Esc)")
-    print("2. Stop and keep video (k)")
-    print("3. Continue generating (Any other key)")
+    print("(d | Esc) Delete current video and Exit")
+    print("(k) Exit Keep current video and Exit")
+    print("(any key) Continue")
     key = cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.destroyAllWindows()
     return key
 
 def main():
@@ -223,43 +248,48 @@ def main():
 
     set_number = max_set_number + 1
 
-    while set_number <= max_set_number + args.numSets:
-        output_path = os.path.join(args.outputDir, f"set-{set_number:03d}.mp4")
+    try:
+        while set_number <= max_set_number + args.numSets:
+            output_path = os.path.join(args.outputDir, f"set-{set_number:03d}.mp4")
 
-        # Randomly select source videos and channel indices
-        # TODO: Add option to prompt user with a imview of the first frame of a randomly selected source
-        # which they can choose to use or not, in which case it will present them with another randomly 
-        # selected source. Do this for all 3 files. It should only work with way if a '--selectSources'
-        # CLI param is true (false by default), otherwise it does what it does now and selects 3 sources
-        # at random without prompting.
-        selected_source_paths = random.sample(source_paths, 3)
-        source_channel_indices = [random.randint(0, 2) for _ in range(3)]
+            # Randomly select source videos and channel indices
+            # TODO: Add option to prompt user with a imview of the first frame of a randomly selected source
+            # which they can choose to use or not, in which case it will present them with another randomly 
+            # selected source. Do this for all 3 files. It should only work with way if a '--selectSources'
+            # CLI param is true (false by default), otherwise it does what it does now and selects 3 sources
+            # at random without prompting.
+            selected_source_paths = random.sample(source_paths, 3)
+            source_channel_indices = [random.randint(0, 2) for _ in range(3)]
 
-        # Get random initial frame positions for each source video
-        source_starting_frames = [random.randint(0, int(cv2.VideoCapture(src).get(cv2.CAP_PROP_FRAME_COUNT)) - 1) for src in selected_source_paths]
+            # Get random initial frame positions for each source video
+            source_starting_frames = [random.randint(0, int(cv2.VideoCapture(src).get(cv2.CAP_PROP_FRAME_COUNT)) - 1) for src in selected_source_paths]
 
-        # Generate video set without confirmation
-        print(f"Generating video set {set_number}...")
-        success = combine_frames_and_write_video(
-            output_path,
-            selected_source_paths,
-            source_channel_indices,
-            source_starting_frames,
-            args
-        )
+            # Generate video set without confirmation
+            print(f"Generating video set {set_number}...")
+            success = combine_frames_and_write_video(
+                output_path,
+                selected_source_paths,
+                source_channel_indices,
+                source_starting_frames,
+                args
+            )
 
-        # Save metadata for the video set
-        if success:
-            set_number += 1
-            absolute_source_paths = [os.path.abspath(path) for path in selected_source_paths]
-            metadata = {
-                "source_paths": ",".join(absolute_source_paths),
-                "channel_indices": ",".join(map(str, source_channel_indices)),
-                "starting_frames": ",".join(map(str, source_starting_frames)),
-                "run_params": vars(args),
-                "script_version": __version__ if '__version__' in globals() else "Unknown"
-            }
-            add_metadata(Path(output_path), metadata)
+            # Save metadata for the video set
+            if success:
+                set_number += 1
+                absolute_source_paths = [os.path.abspath(path) for path in selected_source_paths]
+                metadata = {
+                    "source_paths": ",".join(absolute_source_paths),
+                    "channel_indices": ",".join(map(str, source_channel_indices)),
+                    "starting_frames": ",".join(map(str, source_starting_frames)),
+                    "run_params": vars(args),
+                    "script_version": __version__ if '__version__' in globals() else "Unknown"
+                }
+                add_metadata(Path(output_path), metadata)
+    except ExitException as e:
+        if e:
+            print(f"{e}")
+        print("Bye!")
 
 if __name__ == "__main__":
     main()
