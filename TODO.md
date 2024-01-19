@@ -1,3 +1,27 @@
+
+I want the user to be able to cycle through possible selections for the 3 sources they are going to use for the video to be rendered before it starts. We can just present them with 1 randomly selected source video at a randomly selected start frame, and they can press (enter) if they like it, or (n) to b presented with another option. They do until they have selected 3 options:
+
+
+before rendering video randomly pick the first source and start frame,
+present this to the user. user can pres
+(2) to cycle between options for source, (enter) to select (this happens 3 times until all 3 sources are chosen)
+(c) cycle color space options on preview
+
+
+during render:
+(g) add 10 glitch frames in a row now
+(m) mos next 3 seconds of frames
+Extract source files, starting frames, and settings from a file  (a mash)
+Run for -i or --input file.avi:frame_num or --input file.avi (picks random starting frame)
+
+Option to provide file list / Make interactive choices of source images / Make reproducible images
+Interactive colorSpace switch
+Animate movement of large images
+Try on other sources
+Fix glob command line source param so it doesn't need quotes
+
+
+
 Can you add to this python script take command line params as follows, updating the logic accordingly:
 
 <sourceGlob> (positional. a file path glob that can either be just a directory or a glob pattern, e.g. source/*.mov. optional, defaults to "source/*.(mov|avi|mp4)")

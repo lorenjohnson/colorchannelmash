@@ -1,0 +1,15 @@
+{
+  "mashes": [
+    {
+      "source_paths": [
+        "/Users/lorenjohnson/dev/video/nativeglitch/source/IMG_3935.mov",
+        "/Users/lorenjohnson/dev/video/nativeglitch/source/IMG_4898.mov",
+        "/Users/lorenjohnson/dev/video/nativeglitch/source/IMG_4046.mov"
+      ],
+      "channel_indices": [2, 0, 2],
+      "starting_frames": [1133, 1367, 1559]
+    }
+  ]
+}
+
+

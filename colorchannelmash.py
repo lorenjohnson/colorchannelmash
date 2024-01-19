@@ -1,6 +1,7 @@
 from __init__ import __version__
 from typing import Dict
 from pathlib import Path
+from alive_progress import alive_bar
 import os
 import subprocess
 import glob
@@ -10,6 +11,7 @@ import shlex
 import numpy as np
 import ffmpeg
 import cv2
+import frame_effects
 
 # Video montage generation tool written in Python. Combines frames from three different sources to create composite videos.
 # Customize parameters like source videos, output directory, set duration, number of sets, video dimensions, color space,
@@ -150,77 +152,80 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
     print("(Esc) Stop and delete video, keep generating sets")
     print("(k) Stop and keep video")
 
-    for _ in range(frames_per_set):
-        combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8) if is_color else np.zeros((args.height, args.width), dtype=np.uint8)
+    with alive_bar(frames_per_set) as bar:  # your expected total
+        for _ in range(frames_per_set):
+            combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8) if is_color else np.zeros((args.height, args.width), dtype=np.uint8)
 
-        for i, (source_path, channel_index) in enumerate(zip(source_paths, source_channel_indices)):
-            cap = cv2.VideoCapture(source_path)
+            for i, (source_path, channel_index) in enumerate(zip(source_paths, source_channel_indices)):
+                cap = cv2.VideoCapture(source_path)
 
-            if not cap.isOpened():
-                continue
+                if not cap.isOpened():
+                    continue
 
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            current_frame_positions[i] %= total_frames
-            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_positions[i])
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                current_frame_positions[i] %= total_frames
+                cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_positions[i])
 
-            ret, frame = cap.read()
-            cap.release()
+                ret, frame = cap.read()
+                cap.release()
 
-            if not ret:
-                continue
+                if not ret:
+                    continue
 
-            resized_frame = resize_and_crop_frame(frame, args.height, args.width)
+                resized_frame = resize_and_crop_frame(frame, args.height, args.width)
+                # resized_frame = apply_frame_channel_effects(frame, channle)
 
-            if is_color:
-                if args.colorSpace.lower() not in ['rgb', 'bgr']:
-                    converted_frame = cv2.cvtColor(resized_frame, getattr(cv2, f'COLOR_BGR2{args.colorSpace.upper()}'))
+                if is_color:
+                    if args.colorSpace.lower() not in ['rgb', 'bgr']:
+                        converted_frame = cv2.cvtColor(resized_frame, getattr(cv2, f'COLOR_BGR2{args.colorSpace.upper()}'))
+                    else:
+                        converted_frame = resized_frame
+                    # Swap each source frame into different color channels
+                    combined_frame[:, :, i % 3] = resized_frame[:, :, 0]
+                    # Old version
+                    # combined_frame[:, :, i] = converted_frame[:, :, channel_index]
                 else:
-                    converted_frame = resized_frame
-                # Swap each source frame into different color channels
-                combined_frame[:, :, i % 3] = resized_frame[:, :, 0]
-                # Old version
-                # combined_frame[:, :, i] = converted_frame[:, :, channel_index]
-            else:
-                # Calculate dynamic range of pixel values in the grayscale channel
-                channel_min = np.min(resized_frame[:, :, channel_index])
-                channel_max = np.max(resized_frame[:, :, channel_index])
-                channel_range = channel_max - channel_min
+                    # Calculate dynamic range of pixel values in the grayscale channel
+                    channel_min = np.min(resized_frame[:, :, channel_index])
+                    channel_max = np.max(resized_frame[:, :, channel_index])
+                    channel_range = channel_max - channel_min
 
-                # Adjust the contrast reduction factor based on the dynamic range
-                contrast_reduction_factor = 50 / (channel_range + 1e-10)  # Adding a small value to avoid division by zero
+                    # Adjust the contrast reduction factor based on the dynamic range
+                    contrast_reduction_factor = 50 / (channel_range + 1e-10)  # Adding a small value to avoid division by zero
 
-                # Reduce contrast on the grayscale channel before adding to the combined frame
-                combined_frame[:, :] += np.clip(contrast_reduction_factor * resized_frame[:, :, channel_index], 0, 255).astype(np.uint8)
+                    # Reduce contrast on the grayscale channel before adding to the combined frame
+                    combined_frame[:, :] += np.clip(contrast_reduction_factor * resized_frame[:, :, channel_index], 0, 255).astype(np.uint8)
 
-            current_frame_positions[i] += 1
+                current_frame_positions[i] += 1
+            # combined_frame = frame_effects.keep_them_separated(combined_frame)
+            cv2.imshow("Video Rendering", combined_frame)
+            # Wait for a short period (1 millisecond) to update the display
+            key = cv2.waitKey(1)
 
-        cv2.imshow("Video Rendering", combined_frame)
-        # Wait for a short period (1 millisecond) to update the display
-        key = cv2.waitKey(1)
-
-        if key ==  ord('d'):
-            print("Generation stopped", end="")
-            if os.path.exists(output_path):
-                os.remove(output_path)
-                print(f", {output_path} discarded")
-            else:
-                print("")
-            return False
-        elif key == ord('k'):
-            print(f"Generation stopped, {output_path} saved.")
-            break
-        elif key == 27: # `Esc` key
-            pause_key = pause_rendering_menu()
-            if pause_key in [ord('d'), 27]:
+            if key ==  ord('d'):
+                print("Generation stopped", end="")
                 if os.path.exists(output_path):
                     os.remove(output_path)
-                    print(f"{output_path} discarded")
-                raise ExitException
-            elif pause_key == ord('k'):
-                raise ExitException
-        # Continue rendering for any other key
+                    print(f", {output_path} discarded")
+                else:
+                    print("")
+                return False
+            elif key == ord('k'):
+                print(f"Generation stopped, {output_path} saved.")
+                break
+            elif key == 27: # `Esc` key
+                pause_key = pause_rendering_menu()
+                if pause_key in [ord('d'), 27]:
+                    if os.path.exists(output_path):
+                        os.remove(output_path)
+                        print(f"{output_path} discarded")
+                    raise ExitException
+                elif pause_key == ord('k'):
+                    raise ExitException
+            # Continue rendering for any other key
 
-        writer.write(combined_frame)
+            writer.write(combined_frame)
+            bar()
     writer.release()
     return True
 
