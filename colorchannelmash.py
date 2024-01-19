@@ -9,26 +9,8 @@ import random
 import argparse
 import shlex
 import numpy as np
-import ffmpeg
 import cv2
 import frame_effects
-
-# Video montage generation tool written in Python. Combines frames from three different sources to create composite videos.
-# Customize parameters like source videos, output directory, set duration, number of sets, video dimensions, color space,
-# and frames per second using command line arguments.
-
-# Uses OpenCV for video processing. Provides real-time preview during frame selection. Generated video sets are saved in the
-# specified output directory with filenames like "set-001.avi", "set-002.avi," etc.
-
-# Includes functionality to pause rendering with options to stop and delete the video or stop and keep the video. 
-
-# Usage:
-# python colorchannelmash.py [<sourceGlob>] [--outputDir OUTPUTDIR] [--setLength SETLENGTH] [--numSets NUMSETS]
-#                             [--width WIDTH] [--height HEIGHT] [--colorSpace {hsv,hls,rgb,yuv}] [--fps FPS]
-
-# Example:
-# python colorchannelmash.py source/*.mov --outputDir output --setLength 10 --numSets 5 --width 1242 --height 2688
-#                               --colorSpace hsv --fps 30
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Video montage script with command line parameters.")
@@ -136,6 +118,66 @@ def add_metadata(video: Path, meta: Dict[str, str], overwrite: bool = True):
 class ExitException(Exception):
     pass
 
+def prepare_frame_for_source(source_path, starting_frame, target_height, target_width, channel_index, color_space):
+    cap = cv2.VideoCapture(source_path)
+
+    if not cap.isOpened():
+        return None
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    starting_frame %= total_frames
+    cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
+
+    ret, frame = cap.read()
+    cap.release()
+
+    if not ret:
+        return None
+
+    # Resize and extract the specified color channel
+    processed_frame = resize_and_crop_frame(frame, target_height, target_width)
+    
+    if color_space.lower() not in ['bgr', 'rgb']:
+        processed_frame = cv2.cvtColor(processed_frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
+        processed_frame = processed_frame[:, :, channel_index % 3]  # Extract the color channel used in composition
+    elif color_space.lower() == 'gray':
+        # Grayscale conversion with contrast reduction
+        channel_min = np.min(processed_frame)
+        channel_max = np.max(processed_frame)
+        channel_range = channel_max - channel_min
+        contrast_reduction_factor = 50 / (channel_range + 1e-10)
+        processed_frame = np.clip(contrast_reduction_factor * processed_frame, 0, 255).astype(np.uint8)
+
+    return processed_frame
+
+def select_sources_interactively(source_paths, args):
+    selected_sources = []
+    selected_starting_frames = []
+
+    print("Interactive source selection:")
+    for i in range(3):
+        selected_source = random.choice(source_paths)
+        selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
+
+        while True:
+            processed_frame = prepare_frame_for_source(selected_source, selected_start_frame, args.height, args.width, i, args.colorSpace)
+
+            if processed_frame is not None:
+                cv2.imshow(f"Source {i + 1} - Press (enter) to accept, (n) for the next option", processed_frame)
+                # Wait for a key press in the display window
+                choice = cv2.waitKey(0) & 0xFF
+                cv2.destroyAllWindows()
+
+                if choice == ord('n'):
+                    selected_source = random.choice(source_paths)
+                    selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
+                elif choice == 13:  # Enter key
+                    selected_sources.append(selected_source)
+                    selected_starting_frames.append(selected_start_frame)
+                    break
+
+    return selected_sources, selected_starting_frames
+
 def combine_frames_and_write_video(output_path, source_paths, source_channel_indices, source_starting_frames, args):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
@@ -157,47 +199,15 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
             combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8) if is_color else np.zeros((args.height, args.width), dtype=np.uint8)
 
             for i, (source_path, channel_index) in enumerate(zip(source_paths, source_channel_indices)):
-                cap = cv2.VideoCapture(source_path)
+                processed_frame = prepare_frame_for_source(source_path, current_frame_positions[i], args.height, args.width, channel_index, args.colorSpace)
 
-                if not cap.isOpened():
-                    continue
-
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                current_frame_positions[i] %= total_frames
-                cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_positions[i])
-
-                ret, frame = cap.read()
-                cap.release()
-
-                if not ret:
-                    continue
-
-                resized_frame = resize_and_crop_frame(frame, args.height, args.width)
-                # resized_frame = apply_frame_channel_effects(frame, channle)
-
-                if is_color:
-                    if args.colorSpace.lower() not in ['rgb', 'bgr']:
-                        converted_frame = cv2.cvtColor(resized_frame, getattr(cv2, f'COLOR_BGR2{args.colorSpace.upper()}'))
-                    else:
-                        converted_frame = resized_frame
-                    # Swap each source frame into different color channels
-                    combined_frame[:, :, i % 3] = resized_frame[:, :, 0]
-                    # Old version
-                    # combined_frame[:, :, i] = converted_frame[:, :, channel_index]
-                else:
-                    # Calculate dynamic range of pixel values in the grayscale channel
-                    channel_min = np.min(resized_frame[:, :, channel_index])
-                    channel_max = np.max(resized_frame[:, :, channel_index])
-                    channel_range = channel_max - channel_min
-
-                    # Adjust the contrast reduction factor based on the dynamic range
-                    contrast_reduction_factor = 50 / (channel_range + 1e-10)  # Adding a small value to avoid division by zero
-
-                    # Reduce contrast on the grayscale channel before adding to the combined frame
-                    combined_frame[:, :] += np.clip(contrast_reduction_factor * resized_frame[:, :, channel_index], 0, 255).astype(np.uint8)
+                if processed_frame is not None:
+                    # Ensure both arrays have the same shape before addition
+                    processed_frame = resize_and_crop_frame(processed_frame, args.height, args.width)
+                    combined_frame += processed_frame
 
                 current_frame_positions[i] += 1
-            # combined_frame = frame_effects.keep_them_separated(combined_frame)
+            
             cv2.imshow("Video Rendering", combined_frame)
             # Wait for a short period (1 millisecond) to update the display
             key = cv2.waitKey(1)
@@ -207,8 +217,6 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
                 if os.path.exists(output_path):
                     os.remove(output_path)
                     print(f", {output_path} discarded")
-                else:
-                    print("")
                 return False
             elif key == ord('k'):
                 print(f"Generation stopped, {output_path} saved.")
@@ -235,7 +243,6 @@ def pause_rendering_menu():
     print("(k) Exit Keep current video and Exit")
     print("(any key) Continue")
     key = cv2.waitKey(0)
-    # cv2.destroyAllWindows()
     return key
 
 def main():
@@ -259,22 +266,17 @@ def main():
             output_path = os.path.join(args.outputDir, f"set-{set_number:03d}.mp4")
 
             # Randomly select source videos and channel indices
-            # TODO: Add option to prompt user with a imview of the first frame of a randomly selected source
-            # which they can choose to use or not, in which case it will present them with another randomly 
-            # selected source. Do this for all 3 files. It should only work with way if a '--selectSources'
-            # CLI param is true (false by default), otherwise it does what it does now and selects 3 sources
-            # at random without prompting.
-            selected_source_paths = random.sample(source_paths, 3)
+            selected_sources, selected_starting_frames = select_sources_interactively(source_paths, args)
             source_channel_indices = [random.randint(0, 2) for _ in range(3)]
 
             # Get random initial frame positions for each source video
-            source_starting_frames = [random.randint(0, int(cv2.VideoCapture(src).get(cv2.CAP_PROP_FRAME_COUNT)) - 1) for src in selected_source_paths]
+            source_starting_frames = [random.randint(0, int(cv2.VideoCapture(src).get(cv2.CAP_PROP_FRAME_COUNT)) - 1) for src in selected_sources]
 
             # Generate video set without confirmation
             print(f"Generating video set {set_number}...")
             success = combine_frames_and_write_video(
                 output_path,
-                selected_source_paths,
+                selected_sources,
                 source_channel_indices,
                 source_starting_frames,
                 args
@@ -283,7 +285,7 @@ def main():
             # Save metadata for the video set
             if success:
                 set_number += 1
-                absolute_source_paths = [os.path.abspath(path) for path in selected_source_paths]
+                absolute_source_paths = [os.path.abspath(path) for path in selected_sources]
                 metadata = {
                     "source_paths": ",".join(absolute_source_paths),
                     "channel_indices": ",".join(map(str, source_channel_indices)),
