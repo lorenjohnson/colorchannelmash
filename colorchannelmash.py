@@ -95,7 +95,7 @@ def add_metadata(video: Path, meta: Dict[str, str], overwrite: bool = True):
         '-v', 'quiet',
         '-i', shlex.quote(str(video.absolute())),
         '-movflags', 'use_metadata_tags',
-        '-map_metadata', '0',
+        # '-map_metadata', '0',
         *metadata_args,
         '-c', 'copy',
         shlex.quote(str(save_path))
@@ -119,7 +119,7 @@ def add_metadata(video: Path, meta: Dict[str, str], overwrite: bool = True):
 class ExitException(Exception):
     pass
 
-def prepare_frame_for_source(source_path, starting_frame, target_height, target_width, channel_index, color_space):
+def prepare_frame_for_source(source_path, starting_frame, target_height, target_width, channel_index):
     cap = cv2.VideoCapture(source_path)
 
     if not cap.isOpened():
@@ -137,27 +137,37 @@ def prepare_frame_for_source(source_path, starting_frame, target_height, target_
 
     # Resize and extract the specified color channel
     frame = resize_and_crop_frame(frame, target_height, target_width)
-    # frame = frame_effects.reduce_contrast(frame)
 
-    if color_space.lower() not in ['bgr', 'rgb']:
-        frame = cv2.cvtColor(frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
+    # Extract the selected channel for display in BGR
+    preview_frame = np.zeros_like(frame)
+    preview_frame[:, :, channel_index] = frame[:, :, channel_index]
 
-    return frame
+    return preview_frame
+
 
 def select_sources_interactively(source_paths, args):
     selected_sources = []
     selected_starting_frames = []
 
     print("Interactive source selection:")
+    accumulated_frame = None
+
     for i in range(3):
         selected_source = random.choice(source_paths)
         selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
 
         while True:
-            processed_frame = prepare_frame_for_source(selected_source, selected_start_frame, args.height, args.width, i, args.colorSpace)
+            processed_frame = prepare_frame_for_source(selected_source, selected_start_frame, args.height, args.width, i)
 
             if processed_frame is not None:
-                cv2.imshow(f"Source {i + 1} of {3} - Press (enter) to accept, (n) for the next option", processed_frame)
+                # If this is not the first selection, accumulate the frames
+                if accumulated_frame is not None:
+                    preview_frame = accumulated_frame + processed_frame
+                else:
+                    preview_frame = processed_frame.copy()
+
+                # Display the accumulated frame for interactive preview
+                cv2.imshow(f"Channel {i + 1} - Press (enter) to accept, (n) for the next option", preview_frame)
                 # Wait for a key press in the display window
                 choice = cv2.waitKey(0) & 0xFF
                 cv2.destroyAllWindows()
@@ -166,6 +176,7 @@ def select_sources_interactively(source_paths, args):
                     selected_source = random.choice(source_paths)
                     selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
                 elif choice == 13:  # Enter key
+                    accumulated_frame = preview_frame
                     selected_sources.append(selected_source)
                     selected_starting_frames.append(selected_start_frame)
                     break
@@ -174,7 +185,8 @@ def select_sources_interactively(source_paths, args):
 
     return selected_sources, selected_starting_frames
 
-def combine_frames_and_write_video(output_path, source_paths, source_channel_indices, source_starting_frames, args):
+
+def combine_frames_and_write_video(output_path, source_paths, source_starting_frames, args):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
     # Determine whether the video is color or grayscale based on the chosen color space
@@ -197,13 +209,21 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
             else:
                 combined_frame = np.zeros((args.height, args.width), dtype=np.uint8)
 
-            for i, (source_path, channel_index) in enumerate(zip(source_paths, source_channel_indices)):
-                processed_frame = prepare_frame_for_source(source_path, current_frame_positions[i], args.height, args.width, channel_index, args.colorSpace)
+            for i, source_path in enumerate(source_paths):
+                processed_frame = prepare_frame_for_source(source_path, current_frame_positions[i], args.height, args.width, i)
 
                 if processed_frame is not None:
                     # Ensure both arrays have the same shape before addition
                     # processed_frame = resize_and_crop_frame(processed_frame, args.height, args.width)
-                    combined_frame += processed_frame
+                    
+                    if is_color:
+                        # Accumulate frames for each channel
+                        combined_frame[:, :, i] += processed_frame[:, :, i]
+                        # combined_frame += processed_frame
+                    else:
+                        # For grayscale, accumulate the frame
+                        combined_frame += processed_frame
+
                     current_frame_positions[i] += 1
             
             cv2.imshow("Video Rendering", combined_frame)
@@ -267,18 +287,16 @@ def main():
 
             # Randomly select source videos and channel indices
             selected_sources, selected_starting_frames = select_sources_interactively(source_paths, args)
-            source_channel_indices = [random.randint(0, 2) for _ in range(3)]
 
             # Get random initial frame positions for each source video
-            source_starting_frames = [random.randint(0, int(cv2.VideoCapture(src).get(cv2.CAP_PROP_FRAME_COUNT)) - 1) for src in selected_sources]
+            # source_starting_frames = [random.randint(0, int(cv2.VideoCapture(src).get(cv2.CAP_PROP_FRAME_COUNT)) - 1) for src in selected_sources]
 
             # Generate video set without confirmation
             print(f"Generating video set {set_number}...")
             success = combine_frames_and_write_video(
                 output_path,
                 selected_sources,
-                source_channel_indices,
-                source_starting_frames,
+                selected_starting_frames,
                 args
             )
 
@@ -288,7 +306,6 @@ def main():
                 absolute_source_paths = [os.path.abspath(path) for path in selected_sources]
                 metadata = {
                     "source_paths": ",".join(absolute_source_paths),
-                    "channel_indices": ",".join(map(str, source_channel_indices)),
                     "starting_frames": ",".join(map(str, source_starting_frames)),
                     "run_params": vars(args),
                     "script_version": __version__ if '__version__' in globals() else "Unknown"
