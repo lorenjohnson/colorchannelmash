@@ -28,6 +28,7 @@ def parse_args():
 
 def resize_and_crop_frame(frame, target_height, target_width, rotate_fit=False):
     try:
+        frame = frame_effects.zoom_frame_on_face(frame)
         # Get frame dimensions
         height, width = frame.shape[:2]
 
@@ -135,20 +136,13 @@ def prepare_frame_for_source(source_path, starting_frame, target_height, target_
         return None
 
     # Resize and extract the specified color channel
-    processed_frame = resize_and_crop_frame(frame, target_height, target_width)
-    
-    if color_space.lower() not in ['bgr', 'rgb']:
-        processed_frame = cv2.cvtColor(processed_frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
-        processed_frame = processed_frame[:, :, channel_index % 3]  # Extract the color channel used in composition
-    elif color_space.lower() == 'gray':
-        # Grayscale conversion with contrast reduction
-        channel_min = np.min(processed_frame)
-        channel_max = np.max(processed_frame)
-        channel_range = channel_max - channel_min
-        contrast_reduction_factor = 50 / (channel_range + 1e-10)
-        processed_frame = np.clip(contrast_reduction_factor * processed_frame, 0, 255).astype(np.uint8)
+    frame = resize_and_crop_frame(frame, target_height, target_width)
+    # frame = frame_effects.reduce_contrast(frame)
 
-    return processed_frame
+    if color_space.lower() not in ['bgr', 'rgb']:
+        frame = cv2.cvtColor(frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
+
+    return frame
 
 def select_sources_interactively(source_paths, args):
     selected_sources = []
@@ -175,6 +169,8 @@ def select_sources_interactively(source_paths, args):
                     selected_sources.append(selected_source)
                     selected_starting_frames.append(selected_start_frame)
                     break
+                elif choice == 27: # `Esc` key
+                    raise ExitException
 
     return selected_sources, selected_starting_frames
 
@@ -196,17 +192,19 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
 
     with alive_bar(frames_per_set) as bar:  # your expected total
         for _ in range(frames_per_set):
-            combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8) if is_color else np.zeros((args.height, args.width), dtype=np.uint8)
+            if is_color:
+                combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8)
+            else:
+                combined_frame = np.zeros((args.height, args.width), dtype=np.uint8)
 
             for i, (source_path, channel_index) in enumerate(zip(source_paths, source_channel_indices)):
                 processed_frame = prepare_frame_for_source(source_path, current_frame_positions[i], args.height, args.width, channel_index, args.colorSpace)
 
                 if processed_frame is not None:
                     # Ensure both arrays have the same shape before addition
-                    processed_frame = resize_and_crop_frame(processed_frame, args.height, args.width)
+                    # processed_frame = resize_and_crop_frame(processed_frame, args.height, args.width)
                     combined_frame += processed_frame
-
-                current_frame_positions[i] += 1
+                    current_frame_positions[i] += 1
             
             cv2.imshow("Video Rendering", combined_frame)
             # Wait for a short period (1 millisecond) to update the display
@@ -217,9 +215,11 @@ def combine_frames_and_write_video(output_path, source_paths, source_channel_ind
                 if os.path.exists(output_path):
                     os.remove(output_path)
                     print(f", {output_path} discarded")
+                cv2.destroyAllWindows()
                 return False
             elif key == ord('k'):
                 print(f"Generation stopped, {output_path} saved.")
+                cv2.destroyAllWindows()
                 break
             elif key == 27: # `Esc` key
                 pause_key = pause_rendering_menu()
@@ -295,6 +295,7 @@ def main():
                 }
                 add_metadata(Path(output_path), metadata)
     except ExitException as e:
+        cv2.destroyAllWindows()
         if e:
             print(f"{e}")
         print("Bye!")

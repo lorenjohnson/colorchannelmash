@@ -4,6 +4,67 @@ from skimage import color
 from skimage import img_as_ubyte
 from sklearn.cluster import KMeans
 
+# Apply contrast reduction factor to each channel
+def reduce_contrast(frame):
+    channel_min = np.min(frame, axis=(0, 1))
+    channel_max = np.max(frame, axis=(0, 1))
+    channel_range = channel_max - channel_min
+    contrast_reduction_factor = 50 / (channel_range + 1e-10)
+    return np.clip(contrast_reduction_factor * frame, 0, 255).astype(np.uint8)
+
+def zoom_frame_on_face(frame):
+    # Convert the frame to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Load the pre-trained face detection model
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+    # Perform face detection
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5, minSize=(30, 30))
+
+    if len(faces) > 0:
+        # Find the face with the maximum area (most prominent face)
+        max_face = max(faces, key=lambda rect: rect[2] * rect[3])
+
+        # Extract coordinates of the most prominent face
+        x, y, w, h = max_face
+
+        # Calculate the center of the face
+        center_x = x + w // 2
+        center_y = y + h // 2
+
+        # Calculate the required zoom to fill the frame while maintaining the aspect ratio
+        aspect_ratio = frame.shape[1] / frame.shape[0]
+        target_aspect_ratio = w / h
+
+        if target_aspect_ratio > aspect_ratio:
+            zoom_factor = frame.shape[1] / w
+        else:
+            zoom_factor = frame.shape[0] / h
+
+        # Calculate the size of the zoomed-in region
+        zoomed_size = (int(w * zoom_factor), int(h * zoom_factor))
+
+        # Calculate the region of interest (ROI) for zooming
+        roi_x = max(0, center_x - zoomed_size[0] // 2)
+        roi_y = max(0, center_y - zoomed_size[1] // 2)
+        roi_width = min(frame.shape[1], zoomed_size[0])
+        roi_height = min(frame.shape[0], zoomed_size[1])
+
+        # Extract the ROI from the frame
+        zoomed_roi = frame[roi_y:roi_y + roi_height, roi_x:roi_x + roi_width]
+
+        # Resize the ROI to fill the full frame dimensions
+        zoomed_frame = cv2.resize(zoomed_roi, (frame.shape[1], frame.shape[0]))
+
+        cv2.imshow("Face Zoomed", zoomed_frame)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+        return zoomed_frame
+    else:
+        return frame
+
 def randomly_dispose_pixels(frame, percentage):
     """
     Randomly disposes of N percentage of pixels in a video frame.
