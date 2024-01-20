@@ -1,3 +1,4 @@
+import dlib
 import cv2
 import numpy as np
 from skimage import color
@@ -12,44 +13,44 @@ def reduce_contrast(frame):
     contrast_reduction_factor = 50 / (channel_range + 1e-10)
     return np.clip(contrast_reduction_factor * frame, 0, 255).astype(np.uint8)
 
-def zoom_frame_on_face(frame):
+def zoom_frame_on_face(frame, zoom_percentage=20, preview = False):
+    # Load the frontal face detector and the facial landmarks predictor
+    detector = dlib.get_frontal_face_detector()
+
     # Convert the frame to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Load the pre-trained face detection model
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-
-    # Perform face detection
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5, minSize=(30, 30))
+    # Detect faces
+    faces = detector(gray)
 
     if len(faces) > 0:
         # Find the face with the maximum area (most prominent face)
-        max_face = max(faces, key=lambda rect: rect[2] * rect[3])
+        max_face = max(faces, key=lambda rect: rect.width() * rect.height())
 
         # Extract coordinates of the most prominent face
-        x, y, w, h = max_face
+        x, y, w, h = max_face.left(), max_face.top(), max_face.width(), max_face.height()
 
         # Calculate the center of the face
         center_x = x + w // 2
         center_y = y + h // 2
 
-        # Calculate the required zoom to fill the frame while maintaining the aspect ratio
-        aspect_ratio = frame.shape[1] / frame.shape[0]
-        target_aspect_ratio = w / h
-
-        if target_aspect_ratio > aspect_ratio:
-            zoom_factor = frame.shape[1] / w
-        else:
-            zoom_factor = frame.shape[0] / h
+        # Calculate the zoom factor based on a percentage of the face size
+        zoom_factor_x = (zoom_percentage / 100) * w / frame.shape[1]
+        zoom_factor_y = (zoom_percentage / 100) * h / frame.shape[0]
 
         # Calculate the size of the zoomed-in region
-        zoomed_size = (int(w * zoom_factor), int(h * zoom_factor))
+        zoomed_width = int(w * (1 + zoom_factor_x))
+        zoomed_height = int(h * (1 + zoom_factor_y))
 
         # Calculate the region of interest (ROI) for zooming
-        roi_x = max(0, center_x - zoomed_size[0] // 2)
-        roi_y = max(0, center_y - zoomed_size[1] // 2)
-        roi_width = min(frame.shape[1], zoomed_size[0])
-        roi_height = min(frame.shape[0], zoomed_size[1])
+        roi_x = max(0, center_x - zoomed_width // 2)
+        roi_y = max(0, center_y - zoomed_height // 2)
+        roi_width = min(frame.shape[1], zoomed_width)
+        roi_height = min(frame.shape[0], zoomed_height)
+
+        # Adjust ROI to ensure it's centered on the face
+        roi_x = max(0, center_x - roi_width // 2)
+        roi_y = max(0, center_y - roi_height // 2)
 
         # Extract the ROI from the frame
         zoomed_roi = frame[roi_y:roi_y + roi_height, roi_x:roi_x + roi_width]
@@ -57,9 +58,10 @@ def zoom_frame_on_face(frame):
         # Resize the ROI to fill the full frame dimensions
         zoomed_frame = cv2.resize(zoomed_roi, (frame.shape[1], frame.shape[0]))
 
-        cv2.imshow("Face Zoomed", zoomed_frame)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        if preview:
+            cv2.imshow("Head Zoomed", zoomed_frame)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
         return zoomed_frame
     else:

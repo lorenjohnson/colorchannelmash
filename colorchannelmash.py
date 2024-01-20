@@ -26,7 +26,7 @@ def parse_args():
     parser.add_argument("--fps", type=int, default=30, help="Frames per second for output videos. Optional, defaults to 30.")
     return parser.parse_args()
 
-def resize_and_crop_frame(frame, target_height, target_width, rotate_fit=False):
+def resize_and_crop_frame(frame, target_height, target_width, rotate_fit=True):
     try:
         frame = frame_effects.zoom_frame_on_face(frame)
         # Get frame dimensions
@@ -157,7 +157,7 @@ def select_sources_interactively(source_paths, args):
             processed_frame = prepare_frame_for_source(selected_source, selected_start_frame, args.height, args.width, i, args.colorSpace)
 
             if processed_frame is not None:
-                cv2.imshow(f"Source {i + 1} - Press (enter) to accept, (n) for the next option", processed_frame)
+                cv2.imshow(f"Source {i + 1} of {3} - Press (enter) to accept, (n) for the next option", processed_frame)
                 # Wait for a key press in the display window
                 choice = cv2.waitKey(0) & 0xFF
                 cv2.destroyAllWindows()
