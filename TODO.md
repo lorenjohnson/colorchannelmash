@@ -1,4 +1,11 @@
 
+Try again accessing Apple Photos (and bonus if in more than 1 library at once)
+Keep audio (from all clips)
+Get working with just a normal composite vs separated channels
+Get a custom LUT working (vs just the build in ones)
+
+
+
 I want the user to be able to cycle through possible selections for the 3 sources they are going to use for the video to be rendered before it starts. We can just present them with 1 randomly selected source video at a randomly selected start frame, and they can press (enter) if they like it, or (n) to b presented with another option. They do until they have selected 3 options:
 
 

@@ -5,6 +5,11 @@ from skimage import color
 from skimage import img_as_ubyte
 from sklearn.cluster import KMeans
 
+# Other favorites: COLORMAP_SUMMER, COLORMAP_SPRINT
+# ref. https://docs.opencv.org/4.x/d3/d50/group__imgproc__colormap.html
+def apply_colormap(frame, map = cv2.COLORMAP_OCEAN):
+    return cv2.applyColorMap(frame, map)
+
 # Apply contrast reduction factor to each channel
 def reduce_contrast(frame):
     channel_min = np.min(frame, axis=(0, 1))

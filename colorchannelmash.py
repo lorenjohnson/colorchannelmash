@@ -153,7 +153,8 @@ def prepare_frame_for_source(source_path, starting_frame, target_height, target_
     #    # Invert channels for HLS and YUV (usually a more useful result)
     #     if color_space.lower() in ['hls', 'yuv']:
     #         processed_frame[:, :, :] = 255 - processed_frame[:, :, :]
-    # #     processed_frame = cv2.cvtColor(processed_frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
+    # if color_space.lower() not in ['rgb', 'bgr', 'gray']:
+    #     frame = cv2.cvtColor(frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
 
     return frame
 
@@ -187,7 +188,6 @@ def select_sources_interactively(source_paths, args):
                     raise ExitException
 
     return selected_sources, selected_starting_frames
-
 
 def combine_frames_and_write_video(output_path, source_paths, source_starting_frames, args):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -232,7 +232,7 @@ def combine_frames_and_write_video(output_path, source_paths, source_starting_fr
                         combined_frame = processed_frame.copy()
 
                     current_frame_positions[i] += 1
-            
+            combined_frame = cv2.applyColorMap(combined_frame, cv2.COLORMAP_OCEAN)
             cv2.imshow("Video Rendering", combined_frame)
             # Wait for a short period (1 millisecond) to update the display
             key = cv2.waitKey(1)
