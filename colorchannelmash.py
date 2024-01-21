@@ -12,6 +12,45 @@ import numpy as np
 import cv2
 import frame_effects
 
+def process_source_frame(frame, target_height, target_width, channel_index, color_space):
+    frame = resize_and_crop_frame(frame, target_height, target_width)
+    # Experiment with different color maps for each channel...
+    # if channel_index == 1:
+    #     frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_JET)
+    # if channel_index == 2:
+    # frame = cv2.applyColorMap(frame, cv2.COLORMAP_PINK)
+    # if channel_index == 3:
+    frame = frame_effects.keep_them_separated(frame)
+    frame = frame_effects.apply_colormap(frame, cv2.COLORMAP_HOT)
+    return frame
+
+def process_combined_frame(provided_combined_frame, new_frame, channel_index, args):
+    is_color = args.colorSpace.lower() not in ['gray']
+    
+    if provided_combined_frame is None:
+        combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8)
+    else:
+        combined_frame = provided_combined_frame.copy()
+
+    if is_color:
+        combined_frame[:, :, channel_index] = new_frame[:, :, channel_index]
+
+        # Invert channels for HLS and YUV (usually a more useful result)
+        if args.colorSpace.lower() in ['hls', 'yuv']:
+            combined_frame[:, :, :] = 255 - combined_frame[:, :, :]
+        if args.colorSpace.lower() not in ['rgb', 'bgr']:
+            combined_frame = cv2.cvtColor(combined_frame, getattr(cv2, f'COLOR_BGR2{args.colorSpace.upper()}'))
+    else:
+        # For grayscale, accumulate the intensity values
+        combined_frame[:, :, channel_index] += new_frame[:, :, channel_index]
+
+        # Convert to grayscale color image
+        combined_frame = cv2.cvtColor(combined_frame, cv2.COLOR_BGR2GRAY)
+        combined_frame = cv2.cvtColor(combined_frame, cv2.COLOR_GRAY2BGR)
+        
+    # combined_frame = frame_effects.apply_colormap(combined_frame, cv2.COLORMAP_HOT)
+    return combined_frame
+
 class ExitException(Exception):
     pass
 
@@ -50,7 +89,7 @@ def main():
             output_path = os.path.join(args.outputDir, f"set-{set_number:03d}.mp4")
 
             # Randomly select source videos and channel indices
-            selected_sources, selected_starting_frames = select_sources_interactively(source_paths, args)
+            selected_sources, selected_starting_frames = select_sources(source_paths, args)
 
             # Generate video set without confirmation
             print(f"Generating video set {set_number}...")
@@ -78,91 +117,51 @@ def main():
             print(f"{e}")
         print("Bye!")
 
-def select_sources_interactively(source_paths, args):
+def select_sources(source_paths, args):
     selected_sources = []
     selected_starting_frames = []
+    combined_frame = None
+    preview_frame = None
 
-    print("Interactive source selection:")
-    combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8)
-
-    for i in range(3):
+    for channel_index in range(3):
         while True:
             selected_source = random.choice(source_paths)
             selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
-            current_frame = get_frame_from_source(selected_source, selected_start_frame)
-            processed_frame = process_source_frame(current_frame, args.height, args.width, i, args.colorSpace)
 
-            if processed_frame is not None:
-                combined_frame[:, :, i] = processed_frame[:, :, i]
-                combined_frame = process_combined_frame(combined_frame)
-                # Display the accumulated frame for interactive preview
-                cv2.imshow(f"Channel {i + 1}: (Enter) Accept | (Esc) Cancel | (any key) Next", combined_frame)
-                # Wait for a key press in the display window
-                choice = cv2.waitKey(0) & 0xFF
-                cv2.destroyAllWindows()
+            processed_frame = get_and_process_frame(selected_source, selected_start_frame, channel_index, args)
+            if processed_frame is None: continue
 
-                if choice == 13:  # Enter key
-                    selected_sources.append(selected_source)
-                    selected_starting_frames.append(selected_start_frame)
-                    break
-                elif choice == 27: # `Esc` key
-                    raise ExitException
+            preview_frame = process_combined_frame(combined_frame, processed_frame, channel_index, args)
+            cv2.imshow(f"Channel {channel_index + 1}: (Enter) Accept | (Esc) Cancel | (any key) Next", preview_frame)
+
+            # Wait for a key press in the display window
+            choice = cv2.waitKey(0) & 0xFF
+            cv2.destroyAllWindows()
+
+            if choice == 13:  # Enter key
+                combined_frame = preview_frame.copy()
+                selected_sources.append(selected_source)
+                selected_starting_frames.append(selected_start_frame)
+                break
+            elif choice == 27: # `Esc` key
+                raise ExitException
 
     return selected_sources, selected_starting_frames
 
-def get_frame_from_source(source_path, starting_frame):
+def get_and_process_frame(source_path, starting_frame, channel_index, args):
     cap = cv2.VideoCapture(source_path)
-
     if not cap.isOpened():
         return None
-
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     # Wraps around if starting frame is beyond the length of the clip
     starting_frame %= total_frames
     cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
-
     ret, frame = cap.read()
     cap.release()
-
     if not ret:
         return None
-
-    return frame
-
-def process_source_frame(frame, target_height, target_width, channel_index, color_space):
-    # Experiment with different color maps for each channel...
-    # if channel_index == 1:
-    #     frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_JET)
-    # if channel_index == 2:
-    #     frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_PINK)
-    # if channel_index == 3:
-    # frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_HOT)
-
-    # Extract the selected channel for display in BGR
-    # processed_frame = np.zeros_like(frame)
-    # processed_frame[:, :, channel_index] = frame[:, :, channel_index]
-
-    # From combine_frames, and may still be useful for setting-up color vs grayscale frames
-    # if is_color:
-    #     combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8)
-    # else:
-    #     combined_frame = np.zeros((args.height, args.width), dtype=np.uint8)
-
-    # # Convert the frame to the target color space (skip if target color space is 'gray')
-    # if color_space.lower() != 'gray':
-    #    # Invert channels for HLS and YUV (usually a more useful result)
-    #     if color_space.lower() in ['hls', 'yuv']:
-    #         processed_frame[:, :, :] = 255 - processed_frame[:, :, :]
-    # if color_space.lower() not in ['rgb', 'bgr', 'gray']:
-    #     frame = cv2.cvtColor(frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
-
-    frame = resize_and_crop_frame(frame, target_height, target_width)
-
-    return frame
-
-def process_combined_frame(frame):
-    frame = frame_effects.apply_colormap(frame)
-
+    # Apply any processing to frame
+    frame = process_source_frame(frame, args.height, args.width, channel_index, args.colorSpace)
     return frame
             
 def combine_frames_and_write_video(output_path, source_paths, source_starting_frames, args):
@@ -182,28 +181,13 @@ def combine_frames_and_write_video(output_path, source_paths, source_starting_fr
         for _ in range(frames_per_set):
             combined_frame = None
   
-            for i, source_path in enumerate(source_paths):
-                current_frame = get_frame_from_source(source_path, current_frame_positions[i])
-                processed_frame = process_source_frame(current_frame, args.height, args.width, i, args.colorSpace)
+            for index, source_path in enumerate(source_paths):
+                processed_frame = get_and_process_frame(source_path, current_frame_positions[index], index, args)
+                if processed_frame is None: continue
 
-                if processed_frame is not None:
-                    # Ensure both arrays have the same shape before addition
-                    # processed_frame = resize_and_crop_frame(processed_frame, args.height, args.width)
+                combined_frame = process_combined_frame(combined_frame, processed_frame, index, args)
+                current_frame_positions[index] += 1
 
-                    if combined_frame is not None:
-                        if is_color:
-                            # Accumulate frames for each channel
-                            combined_frame[:, :, i] = processed_frame[:, :, i]
-                            # combined_frame += processed_frame
-                        else:
-                            # For grayscale, accumulate the frame
-                            combined_frame += processed_frame
-                    else:
-                        combined_frame = processed_frame.copy()
-
-                    current_frame_positions[i] += 1
-            
-            combined_frame = process_combined_frame(combined_frame)
             writer.write(combined_frame)
             bar()
 
