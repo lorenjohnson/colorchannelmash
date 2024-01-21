@@ -1,3 +1,15 @@
+osxphotos export --album "videoruin set 1" \
+--only-movies \
+--download-missing \
+--touch-file  \
+--skip-original-if-edited \
+--update \
+--add-missing-to-album "videoruin-missing" \
+source
+
+ --config-only --save-config CONFIG_FILE 
+
+
 osxphotos query --only-movies
 Using last opened Photos library: /Users/lorenjohnson/Pictures/Photos Library.photoslibrary
 Processing database /Users/lorenjohnson/Pictures/Photos Library.photoslibrary/database/photos.db

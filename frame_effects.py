@@ -5,7 +5,7 @@ from skimage import color
 from skimage import img_as_ubyte
 from sklearn.cluster import KMeans
 
-# Other favorites: COLORMAP_SUMMER, COLORMAP_SPRINT
+# Other favorites: COLORMAP_SUMMER, COLORMAP_SPRING, COLORMAP_VIRIDIS, COLORMAP_OCEAN
 # ref. https://docs.opencv.org/4.x/d3/d50/group__imgproc__colormap.html
 def apply_colormap(frame, map = cv2.COLORMAP_OCEAN):
     return cv2.applyColorMap(frame, map)

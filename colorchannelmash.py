@@ -12,6 +12,9 @@ import numpy as np
 import cv2
 import frame_effects
 
+class ExitException(Exception):
+    pass
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Video montage script with command line parameters.")
     parser.add_argument("sourceGlob", nargs='?', default="source/*.(mov|avi|mp4)",
@@ -25,6 +28,194 @@ def parse_args():
                         help="Color space for displaying and combining frames. Options: hsv, hls, rgb, yuv, gray. Optional, defaults to rgb.")
     parser.add_argument("--fps", type=int, default=30, help="Frames per second for output videos. Optional, defaults to 30.")
     return parser.parse_args()
+
+def main():
+    args = parse_args()
+
+    source_paths = glob.glob(args.sourceGlob)
+
+    if not source_paths:
+        print(f"No video files found using the provided sourceGlob: {args.sourceGlob}")
+        return
+
+    max_set_number = 0
+    existing_sets = glob.glob(os.path.join(args.outputDir, 'set-*'))
+    if existing_sets:
+        max_set_number = max(int(s.split('-')[1].split('.')[0]) for s in existing_sets)
+
+    set_number = max_set_number + 1
+
+    try:
+        while set_number <= max_set_number + args.numSets:
+            output_path = os.path.join(args.outputDir, f"set-{set_number:03d}.mp4")
+
+            # Randomly select source videos and channel indices
+            selected_sources, selected_starting_frames = select_sources_interactively(source_paths, args)
+
+            # Generate video set without confirmation
+            print(f"Generating video set {set_number}...")
+            success = combine_frames_and_write_video(
+                output_path,
+                selected_sources,
+                selected_starting_frames,
+                args
+            )
+
+            # Save metadata for the video set
+            if success:
+                set_number += 1
+                absolute_source_paths = [os.path.abspath(path) for path in selected_sources]
+                metadata = {
+                    "source_paths": ",".join(absolute_source_paths),
+                    "starting_frames": ",".join(map(str, selected_starting_frames)),
+                    "run_params": vars(args),
+                    "script_version": __version__ if '__version__' in globals() else "Unknown"
+                }
+                add_metadata(Path(output_path), metadata)
+    except ExitException as e:
+        cv2.destroyAllWindows()
+        if e:
+            print(f"{e}")
+        print("Bye!")
+
+def select_sources_interactively(source_paths, args):
+    selected_sources = []
+    selected_starting_frames = []
+
+    print("Interactive source selection:")
+    combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8)
+
+    for i in range(3):
+        while True:
+            selected_source = random.choice(source_paths)
+            selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
+            current_frame = get_frame_from_source(selected_source, selected_start_frame)
+            processed_frame = process_source_frame(current_frame, args.height, args.width, i, args.colorSpace)
+
+            if processed_frame is not None:
+                combined_frame[:, :, i] = processed_frame[:, :, i]
+                combined_frame = process_combined_frame(combined_frame)
+                # Display the accumulated frame for interactive preview
+                cv2.imshow(f"Channel {i + 1}: (Enter) Accept | (Esc) Cancel | (any key) Next", combined_frame)
+                # Wait for a key press in the display window
+                choice = cv2.waitKey(0) & 0xFF
+                cv2.destroyAllWindows()
+
+                if choice == 13:  # Enter key
+                    selected_sources.append(selected_source)
+                    selected_starting_frames.append(selected_start_frame)
+                    break
+                elif choice == 27: # `Esc` key
+                    raise ExitException
+
+    return selected_sources, selected_starting_frames
+
+def get_frame_from_source(source_path, starting_frame):
+    cap = cv2.VideoCapture(source_path)
+
+    if not cap.isOpened():
+        return None
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # Wraps around if starting frame is beyond the length of the clip
+    starting_frame %= total_frames
+    cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
+
+    ret, frame = cap.read()
+    cap.release()
+
+    if not ret:
+        return None
+
+    return frame
+
+def process_source_frame(frame, target_height, target_width, channel_index, color_space):
+    # Experiment with different color maps for each channel...
+    # if channel_index == 1:
+    #     frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_JET)
+    # if channel_index == 2:
+    #     frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_PINK)
+    # if channel_index == 3:
+    # frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_HOT)
+
+    # Extract the selected channel for display in BGR
+    # processed_frame = np.zeros_like(frame)
+    # processed_frame[:, :, channel_index] = frame[:, :, channel_index]
+
+    # From combine_frames, and may still be useful for setting-up color vs grayscale frames
+    # if is_color:
+    #     combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8)
+    # else:
+    #     combined_frame = np.zeros((args.height, args.width), dtype=np.uint8)
+
+    # # Convert the frame to the target color space (skip if target color space is 'gray')
+    # if color_space.lower() != 'gray':
+    #    # Invert channels for HLS and YUV (usually a more useful result)
+    #     if color_space.lower() in ['hls', 'yuv']:
+    #         processed_frame[:, :, :] = 255 - processed_frame[:, :, :]
+    # if color_space.lower() not in ['rgb', 'bgr', 'gray']:
+    #     frame = cv2.cvtColor(frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
+
+    frame = resize_and_crop_frame(frame, target_height, target_width)
+
+    return frame
+
+def process_combined_frame(frame):
+    frame = frame_effects.apply_colormap(frame)
+
+    return frame
+            
+def combine_frames_and_write_video(output_path, source_paths, source_starting_frames, args):
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    is_color = args.colorSpace.lower() not in ['gray']
+    writer = cv2.VideoWriter(output_path, fourcc, args.fps, (args.width, args.height), isColor=is_color)
+
+    # Calculate the number of frames needed for the desired duration
+    frames_per_set = int(args.fps * args.setLength)
+
+    current_frame_positions = source_starting_frames.copy()
+
+    print("(Esc) Stop and delete video, keep generating sets")
+    print("(k) Stop and keep video")
+
+    with alive_bar(frames_per_set) as bar:  # your expected total
+        for _ in range(frames_per_set):
+            combined_frame = None
+  
+            for i, source_path in enumerate(source_paths):
+                current_frame = get_frame_from_source(source_path, current_frame_positions[i])
+                processed_frame = process_source_frame(current_frame, args.height, args.width, i, args.colorSpace)
+
+                if processed_frame is not None:
+                    # Ensure both arrays have the same shape before addition
+                    # processed_frame = resize_and_crop_frame(processed_frame, args.height, args.width)
+
+                    if combined_frame is not None:
+                        if is_color:
+                            # Accumulate frames for each channel
+                            combined_frame[:, :, i] = processed_frame[:, :, i]
+                            # combined_frame += processed_frame
+                        else:
+                            # For grayscale, accumulate the frame
+                            combined_frame += processed_frame
+                    else:
+                        combined_frame = processed_frame.copy()
+
+                    current_frame_positions[i] += 1
+            
+            combined_frame = process_combined_frame(combined_frame)
+            writer.write(combined_frame)
+            bar()
+
+            preview_result = preview_frame(combined_frame, output_path)
+            if preview_result == True:
+                break
+            elif preview_result == False:
+                return False
+
+    writer.release()
+
+    return True
 
 def resize_and_crop_frame(frame, target_height, target_width, rotate_fit=False):
     try:
@@ -116,213 +307,32 @@ def add_metadata(video: Path, meta: Dict[str, str], overwrite: bool = True):
         if os.path.exists(save_path):
             os.remove(save_path)
 
-class ExitException(Exception):
-    pass
+def preview_frame(frame, output_path):
+    rendering_title = "(Esc) Pause | (d) Delete and Exit | (k) Keep and Exit"
+    cv2.imshow(rendering_title, frame)
+    key = cv2.waitKey(1)
 
-def prepare_frame_for_source(source_path, starting_frame, target_height, target_width, channel_index, color_space):
-    cap = cv2.VideoCapture(source_path)
-
-    if not cap.isOpened():
-        return None
-
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    starting_frame %= total_frames
-    cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
-
-    ret, frame = cap.read()
-    cap.release()
-
-    if not ret:
-        return None
-    # if channel_index == 1:
-    #     frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_JET)
-    # if channel_index == 2:
-    #     frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_PINK)
-    # if channel_index == 3:
-    # frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_HOT)
-
-    # Resize the frame
-    frame = resize_and_crop_frame(frame, target_height, target_width)
-
-    # Extract the selected channel for display in BGR
-    # processed_frame = np.zeros_like(frame)
-    # processed_frame[:, :, channel_index] = frame[:, :, channel_index]
-
-    # # Convert the frame to the target color space (skip if target color space is 'gray')
-    # if color_space.lower() != 'gray':
-    #    # Invert channels for HLS and YUV (usually a more useful result)
-    #     if color_space.lower() in ['hls', 'yuv']:
-    #         processed_frame[:, :, :] = 255 - processed_frame[:, :, :]
-    # if color_space.lower() not in ['rgb', 'bgr', 'gray']:
-    #     frame = cv2.cvtColor(frame, getattr(cv2, f'COLOR_BGR2{color_space.upper()}'))
-
-    return frame
-
-def select_sources_interactively(source_paths, args):
-    selected_sources = []
-    selected_starting_frames = []
-
-    print("Interactive source selection:")
-    combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8)
-
-    for i in range(3):
-        while True:
-            selected_source = random.choice(source_paths)
-            selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
-            processed_frame = prepare_frame_for_source(selected_source, selected_start_frame, args.height, args.width, i, args.colorSpace)
-
-            if processed_frame is not None:
-                combined_frame[:, :, i] = processed_frame[:, :, i]
-
-                # Display the accumulated frame for interactive preview
-                cv2.imshow(f"Channel {i + 1} - Press (enter) to accept, (any key) for the next option", combined_frame)
-                # Wait for a key press in the display window
-                choice = cv2.waitKey(0) & 0xFF
-                cv2.destroyAllWindows()
-
-                if choice == 13:  # Enter key
-                    selected_sources.append(selected_source)
-                    selected_starting_frames.append(selected_start_frame)
-                    break
-                elif choice == 27: # `Esc` key
-                    raise ExitException
-
-    return selected_sources, selected_starting_frames
-
-def combine_frames_and_write_video(output_path, source_paths, source_starting_frames, args):
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-
-    # Determine whether the video is color or grayscale based on the chosen color space
-    is_color = args.colorSpace.lower() not in ['gray']
-
-    writer = cv2.VideoWriter(output_path, fourcc, args.fps, (args.width, args.height), isColor=is_color)
-
-    # Calculate the number of frames needed for the desired duration
-    frames_per_set = int(args.fps * args.setLength)
-
-    current_frame_positions = source_starting_frames.copy()
-
-    print("(Esc) Stop and delete video, keep generating sets")
-    print("(k) Stop and keep video")
-
-    with alive_bar(frames_per_set) as bar:  # your expected total
-        for _ in range(frames_per_set):
-            combined_frame = None
-            # if is_color:
-            #     combined_frame = np.zeros((args.height, args.width, 3), dtype=np.uint8)
-            # else:
-            #     combined_frame = np.zeros((args.height, args.width), dtype=np.uint8)
-
-            for i, source_path in enumerate(source_paths):
-                processed_frame = prepare_frame_for_source(source_path, current_frame_positions[i], args.height, args.width, i, args.colorSpace)
-
-                if processed_frame is not None:
-                    # Ensure both arrays have the same shape before addition
-                    # processed_frame = resize_and_crop_frame(processed_frame, args.height, args.width)
-
-                    if combined_frame is not None:
-                        if is_color:
-                            # Accumulate frames for each channel
-                            combined_frame[:, :, i] = processed_frame[:, :, i]
-                            # combined_frame += processed_frame
-                        else:
-                            # For grayscale, accumulate the frame
-                            combined_frame += processed_frame
-                    else:
-                        combined_frame = processed_frame.copy()
-
-                    current_frame_positions[i] += 1
-            combined_frame = cv2.applyColorMap(combined_frame, cv2.COLORMAP_OCEAN)
-            cv2.imshow("Video Rendering", combined_frame)
-            # Wait for a short period (1 millisecond) to update the display
-            key = cv2.waitKey(1)
-
-            if key ==  ord('d'):
-                print("Generation stopped", end="")
-                if os.path.exists(output_path):
-                    os.remove(output_path)
-                    print(f", {output_path} discarded")
-                cv2.destroyAllWindows()
-                return False
-            elif key == ord('k'):
-                print(f"Generation stopped, {output_path} saved.")
-                cv2.destroyAllWindows()
-                break
-            elif key == 27: # `Esc` key
-                pause_key = pause_rendering_menu()
-                if pause_key in [ord('d'), 27]:
-                    if os.path.exists(output_path):
-                        os.remove(output_path)
-                        print(f"{output_path} discarded")
-                    raise ExitException
-                elif pause_key == ord('k'):
-                    raise ExitException
-            # Continue rendering for any other key
-
-            writer.write(combined_frame)
-            bar()
-    writer.release()
-    return True
-
-def pause_rendering_menu():
-    print("Rendering paused. Choose an option:")
-    print("(d | Esc) Delete current video and Exit")
-    print("(k) Exit Keep current video and Exit")
-    print("(any key) Continue")
-    key = cv2.waitKey(0)
-    return key
-
-def main():
-    args = parse_args()
-
-    source_paths = glob.glob(args.sourceGlob)
-
-    if not source_paths:
-        print(f"No video files found using the provided sourceGlob: {args.sourceGlob}")
-        return
-
-    max_set_number = 0
-    existing_sets = glob.glob(os.path.join(args.outputDir, 'set-*'))
-    if existing_sets:
-        max_set_number = max(int(s.split('-')[1].split('.')[0]) for s in existing_sets)
-
-    set_number = max_set_number + 1
-
-    try:
-        while set_number <= max_set_number + args.numSets:
-            output_path = os.path.join(args.outputDir, f"set-{set_number:03d}.mp4")
-
-            # Randomly select source videos and channel indices
-            selected_sources, selected_starting_frames = select_sources_interactively(source_paths, args)
-
-            # Get random initial frame positions for each source video
-            # source_starting_frames = [random.randint(0, int(cv2.VideoCapture(src).get(cv2.CAP_PROP_FRAME_COUNT)) - 1) for src in selected_sources]
-
-            # Generate video set without confirmation
-            print(f"Generating video set {set_number}...")
-            success = combine_frames_and_write_video(
-                output_path,
-                selected_sources,
-                selected_starting_frames,
-                args
-            )
-
-            # Save metadata for the video set
-            if success:
-                set_number += 1
-                absolute_source_paths = [os.path.abspath(path) for path in selected_sources]
-                metadata = {
-                    "source_paths": ",".join(absolute_source_paths),
-                    "starting_frames": ",".join(map(str, selected_starting_frames)),
-                    "run_params": vars(args),
-                    "script_version": __version__ if '__version__' in globals() else "Unknown"
-                }
-                add_metadata(Path(output_path), metadata)
-    except ExitException as e:
+    if key ==  ord('d'):
+        print("Generation stopped", end="")
+        if os.path.exists(output_path):
+            os.remove(output_path)
+            print(f", {output_path} discarded")
         cv2.destroyAllWindows()
-        if e:
-            print(f"{e}")
-        print("Bye!")
+        return False
+    elif key == ord('k'):
+        print(f"Generation stopped, {output_path} saved.")
+        cv2.destroyAllWindows()
+        return True
+    elif key == 27: # `Esc` key
+        pause_key = cv2.waitKey(0)
+        if pause_key in [ord('d'), 27]:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+                print(f"{output_path} discarded")
+            raise ExitException
+        elif pause_key == ord('k'):
+            cv2.destroyAllWindows()
+            return True
 
 if __name__ == "__main__":
     main()
