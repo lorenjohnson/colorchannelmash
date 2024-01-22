@@ -21,7 +21,7 @@ def process_source_frame(frame, target_height, target_width, channel_index, colo
     # if channel_index == 2:
     # frame = cv2.applyColorMap(frame, cv2.COLORMAP_PINK)
     # if channel_index == 3:
-    # frame = frame_effects.keep_them_separated(frame)
+    # frame = frame_effects.keep_them_separated_alt(frame)
     # frame = frame_effects.apply_colormap(frame, cv2.COLORMAP_HOT)
     return frame
 
@@ -34,19 +34,17 @@ def process_combined_frame(provided_combined_frame, new_frame, channel_index, ar
         combined_frame = provided_combined_frame.copy()
 
     if is_color:
-        # combined_frame[:, :, :] += new_frame[:, :, :]
-        # combined_frame[:, :, channel_index] = new_frame[:, :, channel_index]
-        combined_frame = image_composition.screen([combined_frame, new_frame])
+        combined_frame = image_composition.add_image_as_color_channel(combined_frame, new_frame, channel_index)
+        # combined_frame = image_composition.multiply([combined_frame, new_frame])
 
         # Invert channels for HLS and YUV (usually a more useful result)
         # if args.colorSpace.lower() in ['hls', 'yuv']:
         #     combined_frame[:, :, :] = 255 - combined_frame[:, :, :]
-        # if args.colorSpace.lower() not in ['rgb', 'bgr']:
-        #     combined_frame = cv2.cvtColor(combined_frame, getattr(cv2, f'COLOR_BGR2{args.colorSpace.upper()}'))
+        if args.colorSpace.lower() not in ['rgb', 'bgr']:
+            combined_frame = cv2.cvtColor(combined_frame, getattr(cv2, f'COLOR_BGR2{args.colorSpace.upper()}'))
     else:
         # For grayscale, accumulate the intensity values
         combined_frame[:, :, channel_index] += new_frame[:, :, channel_index]
-
         # Convert to grayscale color image
         combined_frame = cv2.cvtColor(combined_frame, cv2.COLOR_BGR2GRAY)
         combined_frame = cv2.cvtColor(combined_frame, cv2.COLOR_GRAY2BGR)
@@ -200,6 +198,7 @@ def combine_frames_and_write_video(output_path, source_paths, source_starting_fr
                 return False
 
     writer.release()
+    cv2.destroyAllWindows()
 
     return True
 

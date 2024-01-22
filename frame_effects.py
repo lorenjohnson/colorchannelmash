@@ -104,7 +104,9 @@ def randomly_dispose_pixels(frame, percentage):
 
     return modified_frame
 
-# Function to apply the color manipulation effect
+# Function to separate color channels
+# Separates color channels in a 3D image using KMeans clustering for quantization,
+# and subtracts the blue channel from the green channel in 2D images.
 def keep_them_separated(frame):
     if frame.ndim == 3:
         # Reshape the frame to a flat array for KMeans clustering
@@ -134,3 +136,30 @@ def keep_them_separated(frame):
     frame = np.clip(frame, 0, 255)
 
     return frame
+
+# Function to separate color channels (alternate)
+# Creates distinct regions for each color channel in a 3D image by introducing offsets,
+# and subtracts the blue channel from the green channel in 2D images.
+def keep_them_separated_alt(image):
+    if image.ndim == 3:
+        # Get individual color channels
+        blue_channel = image[:, :, 0]
+        green_channel = image[:, :, 1]
+        red_channel = image[:, :, 2]
+
+        # Create separate images for each channel with offsets
+        blue_offset = np.zeros_like(blue_channel)
+        green_offset = np.zeros_like(green_channel)
+        red_offset = np.zeros_like(red_channel)
+
+        # Combine the separated channels with offsets
+        separated_image = cv2.merge((blue_channel + blue_offset, green_channel + green_offset, red_channel + red_offset))
+
+        return separated_image
+    elif image.ndim == 2:
+        # 2D array, treat it as a single-channel image
+        # Subtract the blue channel from the green channel
+        image[:, :] -= image[:, :]
+        return image
+    else:
+        raise ValueError("Unsupported array dimensionality. Only 2D and 3D arrays are supported.")
