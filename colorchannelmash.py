@@ -56,8 +56,8 @@ class ExitException(Exception):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Video montage script with command line parameters.")
-    parser.add_argument("sourceGlob", nargs='?', default="source/*.(mov|avi|mp4)",
-                        help="File path glob for source videos (e.g., source/*.mov). Optional, defaults to 'source/*.(mov|avi|mp4)'.")
+    parser.add_argument("sourceGlob", nargs='*', default=["source/*.mov"],
+                        help="File path glob for source videos (e.g., source/*.mov). Optional, defaults to 'source/*.mov'.")
     parser.add_argument("--outputDir", default="output", help="Output directory for set files. Optional, defaults to 'output'.")
     parser.add_argument("--setLength", type=int, default=10, help="Duration of each set in seconds. Optional, defaults to 10 seconds.")
     parser.add_argument("--numSets", type=int, default=1, help="Total number of sets to generate. Optional, defaults to 1.")
@@ -71,7 +71,9 @@ def parse_args():
 def main():
     args = parse_args()
 
-    source_paths = glob.glob(args.sourceGlob)
+    source_paths = []
+    for source_glob in args.sourceGlob:
+        source_paths.extend(glob.glob(source_glob))
 
     if not source_paths:
         print(f"No video files found using the provided sourceGlob: {args.sourceGlob}")
