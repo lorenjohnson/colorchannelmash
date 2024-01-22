@@ -20,7 +20,7 @@ def process_source_frame(frame, target_height, target_width, channel_index, colo
     # if channel_index == 2:
     # frame = cv2.applyColorMap(frame, cv2.COLORMAP_PINK)
     # if channel_index == 3:
-    frame = frame_effects.keep_them_separated(frame)
+    # frame = frame_effects.keep_them_separated(frame)
     frame = frame_effects.apply_colormap(frame, cv2.COLORMAP_HOT)
     return frame
 
