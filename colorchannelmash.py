@@ -10,22 +10,18 @@ import argparse
 import shlex
 import numpy as np
 import cv2
+from video_source import VideoSource
 import frame_effects
 import image_composition
 
-def process_source_frame(frame, target_height, target_width, channel_index, color_space):
+def process_source_frame(frame, target_height, target_width, layer_index, color_space):
     frame = resize_and_crop_frame(frame, target_height, target_width)
-    # Experiment with different color maps for each channel...
-    # if channel_index == 1:
-    #     frame = cv2.applyColorMap(frame[:,:,channel_index], cv2.COLORMAP_JET)
-    # if channel_index == 2:
-    # frame = cv2.applyColorMap(frame, cv2.COLORMAP_PINK)
-    # if channel_index == 3:
     # frame = frame_effects.keep_them_separated_alt(frame)
     # frame = frame_effects.apply_colormap(frame, cv2.COLORMAP_HOT)
     return frame
 
-def process_combined_frame(provided_combined_frame, new_frame, channel_index, args):
+def process_combined_frame(provided_combined_frame, new_frame, layer_index, args):
+    channel_index = layer_index % 3
     is_color = args.colorSpace.lower() not in ['gray']
     
     if provided_combined_frame is None:
@@ -34,8 +30,8 @@ def process_combined_frame(provided_combined_frame, new_frame, channel_index, ar
         combined_frame = provided_combined_frame.copy()
 
     if is_color:
-        combined_frame = image_composition.add_image_as_color_channel(combined_frame, new_frame, channel_index)
-        # combined_frame = image_composition.multiply([combined_frame, new_frame])
+        # combined_frame = image_composition.add_image_as_color_channel(combined_frame, new_frame, channel_index)
+        combined_frame = image_composition.multiply([combined_frame, new_frame])
 
         # Invert channels for HLS and YUV (usually a more useful result)
         # if args.colorSpace.lower() in ['hls', 'yuv']:
@@ -91,21 +87,22 @@ def main():
             output_path = os.path.join(args.outputDir, f"set-{set_number:03d}.mp4")
 
             # Randomly select source videos and channel indices
-            selected_sources, selected_starting_frames = select_sources(source_paths, args)
+            selected_sources = select_sources(source_paths, args)
 
             # Generate video set without confirmation
             print(f"Generating video set {set_number}...")
+
             success = combine_frames_and_write_video(
                 output_path,
                 selected_sources,
-                selected_starting_frames,
                 args
             )
 
             # Save metadata for the video set
             if success:
                 set_number += 1
-                absolute_source_paths = [os.path.abspath(path) for path in selected_sources]
+                absolute_source_paths = [os.path.abspath(video_source.source_path) for video_source in selected_sources]
+                selected_starting_frames = [video_source.starting_frame for video_source in selected_sources]
                 metadata = {
                     "source_paths": ",".join(absolute_source_paths),
                     "starting_frames": ",".join(map(str, selected_starting_frames)),
@@ -113,11 +110,17 @@ def main():
                     "script_version": __version__ if '__version__' in globals() else "Unknown"
                 }
                 add_metadata(Path(output_path), metadata)
+    
     except ExitException as e:
         cv2.destroyAllWindows()
         if e:
             print(f"{e}")
         print("Bye!")
+
+    finally:
+        # Release VideoReader instances when done
+        for video_source in selected_sources:
+            video_source.release()
 
 def select_sources(source_paths, args):
     selected_sources = []
@@ -125,48 +128,51 @@ def select_sources(source_paths, args):
     combined_frame = None
     preview_frame = None
 
-    for channel_index in range(3):
-        while True:
-            selected_source = random.choice(source_paths)
-            selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
+    layer_index = 0
+    while True:
+        selected_source = random.choice(source_paths)
+        selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
 
-            processed_frame = get_and_process_frame(selected_source, selected_start_frame, channel_index, args)
-            if processed_frame is None: continue
+        video_source = VideoSource(selected_source, selected_start_frame)
+        processed_frame = get_and_process_frame(video_source, layer_index, args)
+        if processed_frame is None:
+            video_source.release()
+            continue
 
-            preview_frame = process_combined_frame(combined_frame, processed_frame, channel_index, args)
-            cv2.imshow(f"Channel {channel_index + 1}: (Enter) Accept | (Esc) Cancel | (any key) Next", preview_frame)
+        preview_frame = process_combined_frame(combined_frame, processed_frame, layer_index, args)
+        layer_index += 1
+        cv2.imshow(f"Layer {layer_index + 1}: (Enter) Accept | (Esc) Cancel | (any key) Next", preview_frame)
 
-            # Wait for a key press in the display window
-            choice = cv2.waitKey(0) & 0xFF
-            cv2.destroyAllWindows()
+        # Wait for a key press in the display window
+        choice = cv2.waitKey(0) & 0xFF
+        cv2.destroyAllWindows()
 
-            if choice == 13:  # Enter key
-                combined_frame = preview_frame.copy()
-                selected_sources.append(selected_source)
-                selected_starting_frames.append(selected_start_frame)
-                break
-            elif choice == 27: # `Esc` key
-                raise ExitException
+        if choice in [ord(' '), ord('n')]:
+            combined_frame = preview_frame.copy()
+            selected_sources.append(video_source)
+            continue
+        elif choice == 13:  # Enter key
+            selected_sources.append(video_source)
+            break
+        elif choice == 27:  # `Esc` key
+            video_source.release()
+            raise ExitException
+        # "s" saves the 
+        else:
+            video_source.release()
 
-    return selected_sources, selected_starting_frames
+    return selected_sources
 
-def get_and_process_frame(source_path, starting_frame, channel_index, args):
-    cap = cv2.VideoCapture(source_path)
-    if not cap.isOpened():
+def get_and_process_frame(video_source, layer_index, args):
+    frame = video_source.get_frame()
+    if frame is None:
         return None
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    # Wraps around if starting frame is beyond the length of the clip
-    starting_frame %= total_frames
-    cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
-    ret, frame = cap.read()
-    cap.release()
-    if not ret:
-        return None
-    # Apply any processing to frame
-    frame = process_source_frame(frame, args.height, args.width, channel_index, args.colorSpace)
+
+    # Apply any processing to the frame
+    frame = process_source_frame(frame, args.height, args.width, layer_index, args.colorSpace)
     return frame
-            
-def combine_frames_and_write_video(output_path, source_paths, source_starting_frames, args):
+
+def combine_frames_and_write_video(output_path, video_sources, args):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     is_color = args.colorSpace.lower() not in ['gray']
     writer = cv2.VideoWriter(output_path, fourcc, args.fps, (args.width, args.height), isColor=is_color)
@@ -174,35 +180,103 @@ def combine_frames_and_write_video(output_path, source_paths, source_starting_fr
     # Calculate the number of frames needed for the desired duration
     frames_per_set = int(args.fps * args.setLength)
 
-    current_frame_positions = source_starting_frames.copy()
-
     print("(Esc) Stop and delete video, keep generating sets")
     print("(k) Stop and keep video")
 
-    with alive_bar(frames_per_set) as bar:  # your expected total
+    with alive_bar(frames_per_set) as bar:
         for _ in range(frames_per_set):
             combined_frame = None
-  
-            for index, source_path in enumerate(source_paths):
-                processed_frame = get_and_process_frame(source_path, current_frame_positions[index], index, args)
-                if processed_frame is None: continue
+
+            for index, video_source in enumerate(video_sources):
+                # video_source.get_frame()
+                processed_frame = get_and_process_frame(video_source, index, args)
+                if processed_frame is None:
+                    continue
 
                 combined_frame = process_combined_frame(combined_frame, processed_frame, index, args)
-                current_frame_positions[index] += 1
+                video_source.starting_frame += 1
 
             writer.write(combined_frame)
             bar()
 
-            preview_result = preview_frame(combined_frame, output_path)
-            if preview_result == True:
-                break
-            elif preview_result == False:
-                return False
+            if not combined_frame is None:
+
+                preview_result = preview_frame(combined_frame, output_path)
+                if preview_result == True:
+                    break
+                elif preview_result == False:
+                    return False
 
     writer.release()
     cv2.destroyAllWindows()
 
     return True
+
+def add_metadata(video: Path, meta: Dict[str, str], overwrite: bool = True):
+    # Check if ffmpeg is installed
+    try:
+        subprocess.run(['ffmpeg', '-version'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("ffmpeg not found. Please install ffmpeg.") from e
+
+    save_path = video.with_suffix('.metadata' + video.suffix)
+
+    metadata_args = []
+    for k, v in meta.items():
+        metadata_args.extend(['-metadata', f'{k}={v}'])
+
+    args = [
+        'ffmpeg',
+        '-v', 'quiet',
+        '-i', shlex.quote(str(video.absolute())),
+        '-movflags', 'use_metadata_tags',
+        # '-map_metadata', '0',
+        *metadata_args,
+        '-c', 'copy',
+        shlex.quote(str(save_path))
+    ]
+
+    if overwrite:
+        args.append('-y')
+
+    try:
+        # Run ffmpeg command
+        subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # Replace the original file with the new one
+        os.replace(save_path, video)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Error running ffmpeg: {e.stderr.decode()}") from e
+    finally:
+        # Delete the save file if it still exists
+        if os.path.exists(save_path):
+            os.remove(save_path)
+
+def preview_frame(frame, output_path):
+    rendering_title = "(Esc) Pause | (d) Stop and Delete | (k) Stop and Keep"
+    cv2.imshow(rendering_title, frame)
+    key = cv2.waitKey(1)
+
+    if key ==  ord('d'):
+        print("Generation stopped", end="")
+        if os.path.exists(output_path):
+            os.remove(output_path)
+            print(f", {output_path} discarded")
+        cv2.destroyAllWindows()
+        return False
+    elif key == ord('k'):
+        print(f"Generation stopped, {output_path} saved.")
+        cv2.destroyAllWindows()
+        return True
+    elif key == 27: # `Esc` key
+        pause_key = cv2.waitKey(0)
+        if pause_key in [ord('d'), 27]:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+                print(f"{output_path} discarded")
+            raise ExitException
+        elif pause_key == ord('k'):
+            cv2.destroyAllWindows()
+            return True
 
 def resize_and_crop_frame(frame, target_height, target_width, rotate_fit=False):
     try:
@@ -255,71 +329,6 @@ def resize_and_crop_frame(frame, target_height, target_width, rotate_fit=False):
         print(f"Error: {e}")
         return np.zeros((target_height, target_width, 3), dtype=np.uint8)
 
-def add_metadata(video: Path, meta: Dict[str, str], overwrite: bool = True):
-    # Check if ffmpeg is installed
-    try:
-        subprocess.run(['ffmpeg', '-version'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError("ffmpeg not found. Please install ffmpeg.") from e
-
-    save_path = video.with_suffix('.metadata' + video.suffix)
-
-    metadata_args = []
-    for k, v in meta.items():
-        metadata_args.extend(['-metadata', f'{k}={v}'])
-
-    args = [
-        'ffmpeg',
-        '-v', 'quiet',
-        '-i', shlex.quote(str(video.absolute())),
-        '-movflags', 'use_metadata_tags',
-        # '-map_metadata', '0',
-        *metadata_args,
-        '-c', 'copy',
-        shlex.quote(str(save_path))
-    ]
-
-    if overwrite:
-        args.append('-y')
-
-    try:
-        # Run ffmpeg command
-        subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # Replace the original file with the new one
-        os.replace(save_path, video)
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Error running ffmpeg: {e.stderr.decode()}") from e
-    finally:
-        # Delete the save file if it still exists
-        if os.path.exists(save_path):
-            os.remove(save_path)
-
-def preview_frame(frame, output_path):
-    rendering_title = "(Esc) Pause | (d) Delete and Exit | (k) Keep and Exit"
-    cv2.imshow(rendering_title, frame)
-    key = cv2.waitKey(1)
-
-    if key ==  ord('d'):
-        print("Generation stopped", end="")
-        if os.path.exists(output_path):
-            os.remove(output_path)
-            print(f", {output_path} discarded")
-        cv2.destroyAllWindows()
-        return False
-    elif key == ord('k'):
-        print(f"Generation stopped, {output_path} saved.")
-        cv2.destroyAllWindows()
-        return True
-    elif key == 27: # `Esc` key
-        pause_key = cv2.waitKey(0)
-        if pause_key in [ord('d'), 27]:
-            if os.path.exists(output_path):
-                os.remove(output_path)
-                print(f"{output_path} discarded")
-            raise ExitException
-        elif pause_key == ord('k'):
-            cv2.destroyAllWindows()
-            return True
-
 if __name__ == "__main__":
     main()
+

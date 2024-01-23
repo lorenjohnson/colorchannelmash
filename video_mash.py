@@ -224,39 +224,6 @@ class VideoMash:
             print(f"Error: {e}")
             return np.zeros((target_height, target_width, 3), dtype=np.uint8)
 
-    def add_metadata(self, video: Path, meta: Dict[str, str], overwrite: bool = True):
-        save_path = video.with_suffix('.metadata' + video.suffix)
-
-        metadata_args = []
-        for k, v in meta.items():
-            metadata_args.extend(['-metadata', f'{k}={v}'])
-
-        args = [
-            'ffmpeg',
-            '-v', 'quiet',
-            '-i', shlex.quote(str(video.absolute())),
-            '-movflags', 'use_metadata_tags',
-            # '-map_metadata', '0',
-            *metadata_args,
-            '-c', 'copy',
-            shlex.quote(str(save_path))
-        ]
-
-        if overwrite:
-            args.append('-y')
-
-        try:
-            # Run ffmpeg command
-            subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            # Replace the original file with the new one
-            os.replace(save_path, video)
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Error running ffmpeg: {e.stderr.decode()}") from e
-        finally:
-            # Delete the save file if it still exists
-            if os.path.exists(save_path):
-                os.remove(save_path)
-
     def preview_frame(self, frame, output_path):
         rendering_title = "(Esc) Pause | (d) Stop and Delete | (k) Stop and Keep"
         cv2.imshow(rendering_title, frame)
@@ -292,3 +259,47 @@ class VideoMash:
         # Apply any processing to the frame
         frame = self.process_source_frame(frame, self.height, self.width, layer_index)
         return frame
+
+    def add_metadata(self, output_path):
+        output_path = Path(output_path)
+        source_paths = [os.path.abspath(video_source.source_path) for video_source in self.selected_sources]
+        starting_frames = [video_source.starting_frame for video_source in self.selected_sources]
+        metadata = {
+            "source_paths": ",".join(source_paths),
+            "starting_frames": ",".join(map(str, starting_frames)),
+            "seconds": self.seconds,
+            "width": self.width,
+            "height": self.height,
+            "color_space": self.color_space,
+            "fps": self.fps,
+            "script_version": __version__ if '__version__' in globals() else "Unknown"
+        }
+
+        save_path = output_path.with_suffix('.metadata' + output_path.suffix)
+
+        metadata_args = []
+        for k, v in metadata.items():
+            metadata_args.extend(['-metadata', f'{k}={v}'])
+
+        args = [
+            'ffmpeg',
+            '-v', 'quiet',
+            '-i', shlex.quote(str(output_path.absolute())),
+            '-movflags', 'use_metadata_tags',
+            # '-map_metadata', '0',
+            *metadata_args,
+            '-c', 'copy',
+            shlex.quote(str(save_path))
+        ]
+
+        try:
+            # Run ffmpeg command
+            subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # Replace the original file with the new one
+            os.replace(save_path, output_path)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Error running ffmpeg: {e.stderr.decode()}") from e
+        finally:
+            # Delete the save file if it still exists
+            if os.path.exists(save_path):
+                os.remove(save_path)
