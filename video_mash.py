@@ -67,7 +67,7 @@ class VideoMash:
     def select_sources(self):
         selected_sources = self.selected_sources
         layer_mashes = self.layer_mashes
-        layer_index = len(selected_sources) - 1
+        layer_index = max(len(selected_sources) - 1, 0)
         preview_frame = None
         if layer_index > 0:
             video_source = selected_sources[layer_index]
@@ -90,7 +90,6 @@ class VideoMash:
             cv2.imshow(f"Layer {layer_index + 1}: (Space) Next Option | (Enter) Select | (Esc) Go back layer | (s) Start render", preview_frame)
 
             key = cv2.waitKeyEx(0) & 0xFF
-            print(key)
 
             # Enter - select current image as the layer and moves to next layer selection
             if key == 13:
@@ -214,14 +213,12 @@ class VideoMash:
             # Get frame dimensions
             height, width = frame.shape[:2]
 
-            # Check if rotating the image provides a better fit
-            if rotate_fit:
-                rotated_frame = cv2.transpose(frame)
-                rotated_height, rotated_width = rotated_frame.shape[:2]
-
-                if (rotated_width >= target_height) and (rotated_height >= target_width):
-                    frame = rotated_frame
-                    height, width = rotated_height, rotated_width
+            # # Check if a person is present
+            # if image_utils.is_person_present(frame):
+            #     # Adjust cropping region to move the center 25% up
+            #     center_shift = int(0.8 * target_height)
+            # else:
+            center_shift = int(0.2 * target_height)
 
             # Calculate the aspect ratio
             aspect_ratio = width / height
@@ -239,7 +236,7 @@ class VideoMash:
 
             # Calculate the cropping region
             start_x = max(0, (fill_width - target_width) // 2)
-            start_y = max(0, (fill_height - target_height) // 2)
+            start_y = max(0, (fill_height - target_height) // 2 - center_shift)
             end_x = min(fill_width, start_x + target_width)
             end_y = min(fill_height, start_y + target_height)
 
@@ -253,11 +250,9 @@ class VideoMash:
             result_frame[:end_y-start_y, :end_x-start_x] = cropped_frame
 
             return result_frame
-
         except Exception as e:
-            # Handle errors by returning a blank frame
-            print(f"Error: {e}")
-            return np.zeros((target_height, target_width, 3), dtype=np.uint8)
+            print(f"Error in resize_and_crop_frame: {e}")
+            return None
 
     def preview_frame(self, frame, output_path):
         rendering_title = "(Esc) Pause | (d) Stop and Delete | (k) Stop and Keep"

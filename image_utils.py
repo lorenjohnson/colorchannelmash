@@ -48,3 +48,19 @@ def adjust_contrast(image, target_contrast, color_space='BGR'):
         adjusted_image = np.clip(adjusted_image, 0, max_pixel_value)
 
     return adjusted_image
+
+def is_person_present(image, threshold = 0.1):
+    # Convert the image to grayscale for simplicity
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Apply edge detection using the Canny detector
+    edges = cv2.Canny(gray, 50, 150)
+
+    # Calculate the percentage of white pixels in the top region of the image
+    height, width = edges.shape
+    top_region = edges[:height//2, :]
+    white_pixel_percentage = np.sum(top_region == 255) / (width * height // 2)
+
+    # Heuristic: If a significant percentage of the top region has edges (white pixels),
+    # consider it likely that there's a person in the video
+    return white_pixel_percentage > threshold  # You can adjust this threshold based on your observations
