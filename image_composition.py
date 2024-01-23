@@ -19,7 +19,7 @@ def add_image_as_color_channel(target_image, new_image, channel_index):
     Replace a channel in the target image with the corresponding channel from the new image.
     """
     if not np.all(new_image == 0) and not np.all(new_image == 255):
-        target_image[:, :, channel_index] = new_image[:, :, channel_index]
+        target_image[:, :, channel_index] = new_image[:, :, channel_index % 3]
     return target_image
 
 def average(images):
