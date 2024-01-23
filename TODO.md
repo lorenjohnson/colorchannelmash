@@ -1,3 +1,11 @@
+Now that I can regnerate from a mash:
+
+- Clean-up duplicated code between the parsing and the select_sources
+- Make sure that CLI params override things in the file
+- Maybe only run once if there is one file, ignore numSets (or just make numSets go away)
+
+
+
 
 Try again accessing Apple Photos (and bonus if in more than 1 library at once)
 Keep audio (from all clips)

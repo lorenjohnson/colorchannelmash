@@ -30,6 +30,7 @@ class VideoMash:
         self.target_brightness = 0.45
         self.target_contrast = 0.3
         self.selected_sources = []
+        self.layer_mashes = [None]
 
         # Check if there is at least one source path
         if source_paths:
@@ -54,16 +55,19 @@ class VideoMash:
         self.color_space = metadata['color_space']
         self.fps = float(metadata['fps'])
 
-        for index, source_path in enumerate(source_paths):
-            print(f"source_path {source_path} | starting_frames[index] {starting_frames[index]}")
+        for layer_index, source_path in enumerate(source_paths):
             self.selected_sources.append(
-                VideoSource(source_path, starting_frames[index])
+                VideoSource(source_path, starting_frames[layer_index])
+            )
+            processed_frame = self.get_and_process_frame(self.selected_sources[layer_index], layer_index)
+            self.layer_mashes.append(
+                self.mash_frames(self.layer_mashes[layer_index], processed_frame, layer_index)
             )
 
     def select_sources(self):
         selected_sources = self.selected_sources
+        layer_mashes = self.layer_mashes
         layer_index = len(selected_sources) - 1
-        layer_mashes = [None]
         preview_frame = None
         if layer_index > 0:
             video_source = selected_sources[layer_index]
