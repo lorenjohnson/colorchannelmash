@@ -4,6 +4,7 @@ Now that I can regnerate from a mash:
 - Make sure that CLI params override things in the file
 - Maybe only run once if there is one file, ignore numSets (or just make numSets go away)
 
+Make still images decay: as an animation, extending the current colorchannelmash script?
 
 
 
