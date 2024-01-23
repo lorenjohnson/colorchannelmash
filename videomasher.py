@@ -44,7 +44,7 @@ def main():
                 max_mash_number = max(int(s.split('-')[1].split('.')[0]) for s in existing_mashes)
             mash_number = max_mash_number + 1
 
-            while mash_number <= max_mash_number + mash_number:
+            while mash_number <= max_mash_number + args.mashes:
                 output_path = os.path.join(args.outputDir, f"mash-{mash_number:03d}.mp4")
 
                 print(f"Starting video mash {mash_number}...")
@@ -52,6 +52,7 @@ def main():
                 video_mash = VideoMash(
                     source_paths, args.seconds, args.width, args.height, args.colorSpace, args.fps
                 )
+                # success = True
                 success = video_mash.mash(output_path)
 
                 if success: mash_number += 1

@@ -6,6 +6,7 @@ import subprocess
 import random
 import argparse
 import shlex
+import json
 import numpy as np
 import cv2
 from video_source import VideoSource
@@ -30,19 +31,49 @@ class VideoMash:
         self.target_contrast = 0.3
         self.selected_sources = []
 
+        # Check if there is at least one source path
+        if source_paths:
+            # Read metadata from the first path found in source_paths
+            first_source_path = source_paths[0]
+            metadata = self.read_metadata(first_source_path)
+            # Check if the metadata contains the 'source_paths' key
+            if metadata.get('tags').get('source_paths'):
+                # Parse and set the values from metadata
+                self.parse_metadata(metadata['tags'])
+                
+    # Extract values from metadata and set them in the VideoMash instance
+    def parse_metadata(self, metadata):
+        source_paths = metadata['source_paths'].split(',')
+        starting_frames = list(map(int, metadata['starting_frames'].split(',')))
+
+        self.source_paths = source_paths
+        self.starting_frames = starting_frames
+        self.seconds = float(metadata['seconds'])
+        self.width = int(metadata['width'])
+        self.height = int(metadata['height'])
+        self.color_space = metadata['color_space']
+        self.fps = float(metadata['fps'])
+
+        for index, source_path in enumerate(source_paths):
+            print(f"source_path {source_path} | starting_frames[index] {starting_frames[index]}")
+            self.selected_sources.append(
+                VideoSource(source_path, starting_frames[index])
+            )
+
     def select_sources(self):
-        selected_sources = []
+        selected_sources = self.selected_sources
+        layer_index = len(selected_sources) - 1
         layer_mashes = [None]
-        video_source = None
         preview_frame = None
-        layer_index = 0
+        if layer_index > 0:
+            video_source = selected_sources[layer_index]
+        else:
+            video_source = None
 
         while True:
             if not video_source:
                 selected_source_path = random.choice(self.source_paths)
-                selected_start_frame = random.randint(0, int(cv2.VideoCapture(selected_source_path).get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
-
-                video_source = VideoSource(selected_source_path, selected_start_frame)
+                video_source = VideoSource(selected_source_path)
 
             processed_frame = self.get_and_process_frame(video_source, layer_index)
 
@@ -127,7 +158,7 @@ class VideoMash:
 
           writer.release()
           cv2.destroyAllWindows()
-          self.add_metadata(output_path)
+          self.write_metadata(output_path)
 
           return True
 
@@ -260,7 +291,7 @@ class VideoMash:
         frame = self.process_source_frame(frame, self.height, self.width, layer_index)
         return frame
 
-    def add_metadata(self, output_path):
+    def write_metadata(self, output_path):
         output_path = Path(output_path)
         source_paths = [os.path.abspath(video_source.source_path) for video_source in self.selected_sources]
         starting_frames = [video_source.starting_frame for video_source in self.selected_sources]
@@ -285,7 +316,8 @@ class VideoMash:
             'ffmpeg',
             '-v', 'quiet',
             '-i', shlex.quote(str(output_path.absolute())),
-            '-movflags', 'use_metadata_tags',
+            '-movflags',
+            'use_metadata_tags',
             # '-map_metadata', '0',
             *metadata_args,
             '-c', 'copy',
@@ -303,3 +335,21 @@ class VideoMash:
             # Delete the save file if it still exists
             if os.path.exists(save_path):
                 os.remove(save_path)
+
+    def read_metadata(self, input_path: str) -> Dict:
+        ffprobe_cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-print_format', 'json',
+            '-show_format',
+            shlex.quote(input_path)
+        ]
+
+        try:
+            # Run ffprobe command and capture output
+            result = subprocess.run(ffprobe_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            output_json = result.stdout.decode('utf-8')
+            metadata_dict = json.loads(output_json)['format']
+            return metadata_dict
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Error running ffprobe: {e.stderr.decode()}") from e

@@ -9,7 +9,6 @@ class VideoReader:
         if not self.cap.isOpened():
             raise Exception(f"Error opening video file: {source_path}")
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.current_frame_position = 0
 
     def get_frame(self, starting_frame):
         # Wraps around if starting frame position is beyond the length of the clip
