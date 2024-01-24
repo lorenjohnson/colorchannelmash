@@ -284,8 +284,8 @@ class VideoMash:
 
         if is_color:
             # mashed_frame = image_composition.add_image_as_color_channel(mashed_frame, new_frame, channel_index)
+            # mashed_frame = image_utils.glitch_frame(mashed_frame, new_frame)
             mashed_frame = image_composition.multiply([mashed_frame, new_frame])
-
             # Invert channels for HLS and YUV (usually a more useful result)
             # if self.color_space.lower() in ['hls', 'yuv']:
             #     mashed_frame[:, :, :] = 255 - mashed_frame[:, :, :]
