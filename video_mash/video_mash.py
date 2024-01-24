@@ -201,12 +201,15 @@ class VideoMash:
         output_filename = os.path.join(cwd, 'source', f'webcam-{webcam_output_count:03d}.mp4')
 
         # Save the webcam capture to the source directory
-        cv2.VideoWriter(
+        writer = cv2.VideoWriter(
             output_filename,
             cv2.VideoWriter_fourcc(*'mp4v'),
             self.fps,
             (self.width, self.height)
-        ).write(webcam_video)
+        )
+        for frame in frames:
+            writer.write(frame)
+        writer.release()
 
         # Create a VideoSource object for the webcam with an absolute path
         webcam_source = VideoSource(output_filename, 0)
