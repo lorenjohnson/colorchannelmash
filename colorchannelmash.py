@@ -11,13 +11,13 @@ import shlex
 import numpy as np
 import cv2
 from video_source import VideoSource
-import frame_effects
+import image_utils
 import image_composition
 
 def process_source_frame(frame, target_height, target_width, layer_index, color_space):
     frame = resize_and_crop_frame(frame, target_height, target_width)
-    # frame = frame_effects.keep_them_separated_alt(frame)
-    # frame = frame_effects.apply_colormap(frame, cv2.COLORMAP_HOT)
+    # frame = image_utils.keep_color_channels_separated_alt(frame)
+    # frame = image_utils.apply_colormap(frame, cv2.COLORMAP_HOT)
     return frame
 
 def process_combined_frame(provided_combined_frame, new_frame, layer_index, args):
@@ -44,7 +44,7 @@ def process_combined_frame(provided_combined_frame, new_frame, layer_index, args
         # Convert to grayscale color image
         combined_frame = cv2.cvtColor(combined_frame, cv2.COLOR_BGR2GRAY)
         combined_frame = cv2.cvtColor(combined_frame, cv2.COLOR_GRAY2BGR)
-    # combined_frame = frame_effects.apply_colormap(combined_frame, cv2.COLORMAP_HOT)
+    # combined_frame = image_utils.apply_colormap(combined_frame, cv2.COLORMAP_HOT)
     return combined_frame
 
 class ExitException(Exception):
@@ -280,7 +280,7 @@ def preview_frame(frame, output_path):
 
 def resize_and_crop_frame(frame, target_height, target_width, rotate_fit=False):
     try:
-        # frame = frame_effects.zoom_frame_on_face(frame)
+        # frame = image_utils.zoom_image_on_face(frame)
         # Get frame dimensions
         height, width = frame.shape[:2]
 
