@@ -1,4 +1,3 @@
-from __init__ import __version__
 from typing import Dict
 from pathlib import Path
 import re
@@ -10,9 +9,9 @@ import shlex
 import json
 import numpy as np
 import cv2
-from video_source import VideoSource
-import image_composition
-import image_utils
+from .video_source import VideoSource
+from . import image_composition
+from . import image_utils
 from alive_progress import alive_bar
 
 class ExitException(Exception):
@@ -81,71 +80,69 @@ class VideoMash:
         preview_frame = None
         webcam_mode = False
         webcam_output_count = 0
+        video_source = None
 
         while True:
-            if not webcam_mode:
-                if layer_index > 0:
-                    video_source = selected_sources[layer_index]
-                else:
-                    video_source = None
-            else:
+            if len(selected_sources) >= layer_index + 1:
+                print('here')
+                video_source = selected_sources[layer_index]
+
+            if not video_source and not webcam_mode:
+                selected_source_path = random.choice(self.source_paths)
+                video_source = VideoSource(selected_source_path)
+            elif not video_source and webcam_mode:
+                video_source = self.capture_and_save_webcam()
+
+            processed_frame = self.get_and_process_frame(video_source, layer_index)
+
+            if processed_frame is None:
+                video_source.release()
                 video_source = None
+                continue
 
-            while True:
-                if not video_source and not webcam_mode:
-                    selected_source_path = random.choice(self.source_paths)
-                    video_source = VideoSource(selected_source_path)
-                elif not video_source and webcam_mode:
-                    video_source = self.capture_and_save_webcam()
+            preview_frame = self.mash_frames(layer_mashes[layer_index], processed_frame, layer_index)
+            cv2.imshow(f"Layer {layer_index}: (Space) Next Option | (Enter) Select | (Esc) Go back layer | (s) Start render | (c) Switch to Webcam", preview_frame)
 
-                processed_frame = self.get_and_process_frame(video_source, layer_index)
+            key = cv2.waitKey(0) & 0xFF
 
-                if processed_frame is None:
+            # Enter - select current image as the layer and moves to next layer selection
+            if key == 13:
+                cv2.destroyAllWindows()
+                layer_mashes.append(preview_frame.copy())
+                selected_sources.append(video_source)
+                video_source.release()
+                video_source = None
+                layer_index += 1
+                continue
+            # Esc - goes back a layer removing the previously selected source for that layer
+            elif key == 27:
+                if layer_index == 0:
                     video_source.release()
-                    video_source = None
-                    continue
-
-                preview_frame = self.mash_frames(layer_mashes[layer_index], processed_frame, layer_index)
-                cv2.imshow(f"Layer {layer_index + 1}: (Space) Next Option | (Enter) Select | (Esc) Go back layer | (s) Start render | (c) Switch to Webcam", preview_frame)
-
-                key = cv2.waitKey(0) & 0xFF
-
-                # Enter - select current image as the layer and moves to next layer selection
-                if key == 13:
-                    cv2.destroyAllWindows()
-                    layer_mashes.append(preview_frame.copy())
-                    selected_sources.append(video_source)
-                    video_source.release()
-                    video_source = None
-                    layer_index += 1
-                    break
-                # Esc - goes back a layer removing the previously selected source for that layer
-                elif key == 27:
-                    if layer_index == 0:
-                        video_source.release()
-                        raise ExitException
-                    video_source.release()
-                    video_source = selected_sources.pop()
-                    layer_mashes.pop()
-                    layer_index -= 1
-                    break
-                # Space - shows next source option for this layer
-                elif key == ord(' '):
-                    cv2.destroyAllWindows()
-                    video_source.release()
-                    video_source = None
-                    break
-                # "s" - Starts render
-                elif key == ord('s') and layer_index > 0:
-                    cv2.destroyAllWindows()
-                    selected_sources.append(video_source)
-                    break
-                # "c" - Switch to webcam mode
-                elif key == ord('c'):
-                    cv2.destroyAllWindows()
-                    video_source.release()
-                    webcam_mode = not webcam_mode
-                    break
+                    raise ExitException
+                video_source.release()
+                video_source = selected_sources.pop()
+                layer_mashes.pop()
+                layer_index -= 1
+                continue
+            # Space - shows next source option for this layer
+            elif key == ord(' '):
+                cv2.destroyAllWindows()
+                video_source.release()
+                video_source = None
+                if layer_index < len(selected_sources):
+                    del selected_sources[layer_index]
+                continue
+            # "c" - Switch to webcam mode
+            elif key == ord('c'):
+                cv2.destroyAllWindows()
+                video_source.release()
+                webcam_mode = not webcam_mode
+                continue
+            # "s" - Starts render
+            elif key == ord('s') and layer_index > 0:
+                cv2.destroyAllWindows()
+                selected_sources.append(video_source)
+                break
 
         return selected_sources
 

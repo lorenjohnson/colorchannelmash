@@ -1,6 +1,6 @@
 import random
 import cv2
-from video_reader import VideoReader
+from .video_reader import VideoReader
 
 class VideoSource:
     def __init__(self, source_path, starting_frame = None):
