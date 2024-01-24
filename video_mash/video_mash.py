@@ -84,10 +84,8 @@ class VideoMash:
 
         while True:
             if len(selected_sources) >= layer_index + 1:
-                print('here')
                 video_source = selected_sources[layer_index]
-
-            if not video_source and not webcam_mode:
+            elif not video_source and not webcam_mode:
                 selected_source_path = random.choice(self.source_paths)
                 video_source = VideoSource(selected_source_path)
             elif not video_source and webcam_mode:
@@ -127,10 +125,10 @@ class VideoMash:
             # Space - shows next source option for this layer
             elif key == ord(' '):
                 cv2.destroyAllWindows()
-                video_source.release()
-                video_source = None
                 if layer_index < len(selected_sources):
                     del selected_sources[layer_index]
+                video_source.release()
+                video_source = None
                 continue
             # "c" - Switch to webcam mode
             elif key == ord('c'):
