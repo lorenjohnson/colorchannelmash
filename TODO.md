@@ -1,7 +1,9 @@
 
 LIVE
+  How to speed-up rendering
   Make webcam a live source during video rendering
   Make video sources play on top of each other in layer selection, starting from the start frame of when each is selected
+  Have it dynamically take-in new sources as they are found
 
 Bring back audio for all clips
 
@@ -18,6 +20,9 @@ Try again accessing Apple Photos (and bonus if in more than 1 library at once)
 
 Get a custom LUT working (vs just the build in ones)
 
+
+Try with just images
+Try to get OSX photos to import directly
 
 
 I want the user to be able to cycle through possible selections for the 3 sources they are going to use for the video to be rendered before it starts. We can just present them with 1 randomly selected source video at a randomly selected start frame, and they can press (enter) if they like it, or (n) to b presented with another option. They do until they have selected 3 options:
