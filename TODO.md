@@ -1,4 +1,8 @@
 
+LIVE
+  Make webcam a live source during video rendering
+  Make video sources play on top of each other in layer selection, starting from the start frame of when each is selected
+
 Bring back audio for all clips
 
 Add still images animation: Decay them over time, extending the current colorchannelmash script?
