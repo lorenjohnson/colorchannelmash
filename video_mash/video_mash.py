@@ -270,7 +270,7 @@ class VideoMash:
 
         frame = self.resize_and_crop_frame(frame, target_height, target_width)
         # frame = image_utils.keep_color_channels_separated(frame)
-        # frame = image_utils.apply_colormap(frame, cv2.COLORMAP_HOT)
+        # frame = image_utils.apply_colormap(frame)
         return frame
 
     def mash_frames(self, provided_mashed_frame, new_frame, layer_index):

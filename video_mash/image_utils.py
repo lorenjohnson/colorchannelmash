@@ -5,6 +5,7 @@ from skimage import color
 from skimage import img_as_ubyte
 from sklearn.cluster import KMeans
 
+# cv2.COLORMAP_HOT
 def apply_colormap(image, colormap=cv2.COLORMAP_OCEAN):
     return cv2.applyColorMap(image, colormap)
 

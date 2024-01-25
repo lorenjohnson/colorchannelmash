@@ -1,9 +1,13 @@
+Bug fix: sometimes crashes on bad videos... 
 
 LIVE
   How to speed-up rendering
   Make webcam a live source during video rendering
   Make video sources play on top of each other in layer selection, starting from the start frame of when each is selected
   Have it dynamically take-in new sources as they are found
+
+Sound track random selection / keyboard selection from source directories (wav, mp3, aif)
+Reverse playback randomly, or make it an option
 
 Bring back audio for all clips
 
