@@ -1,4 +1,15 @@
-Bug fix: sometimes crashes on bad videos... 
+Bug: Back/forward from render state still sometimes index goes out of range
+Feature: Moshing / more creative destruction chaos to files
+Feature: Mash files...
+Feature: When hitting one Esc in the midst of rendering make it possible to start re-selecting layers again by simply hitting spacebar, throwing out the current render (partially implemented)
+Feature: Bring back audio for all clips
+Feature: Make --effect cli param take color map options...
+Feature: Add mode cycling during select stage ("m")
+Feature: Add effect(s) cycling during select stage ("e")
+Feature: Change colorSpace CLI arg to colorMode
+  rgb (default) gray, hsl, yuv, map_ocean (etc, cv2 builtins), <custom_lut_filepath>
+Feature: Change color modes on the fly
+Feature: Add still images animation: Decay them over time, extending the current colorchannelmash script?
 
 LIVE
   How to speed-up rendering
@@ -9,25 +20,7 @@ LIVE
 Sound track random selection / keyboard selection from source directories (wav, mp3, aif)
 Reverse playback randomly, or make it an option
 
-Bring back audio for all clips
-
-Add still images animation: Decay them over time, extending the current colorchannelmash script?
-
-Now that I can regnerate from a mash:
-
-- Make sure that CLI params override things in the file
-- Maybe only run once if there is one file, ignore numSets (or just make numSets go away)
-
-Add Video Moshing function
-
-Try again accessing Apple Photos (and bonus if in more than 1 library at once)
-
-Get a custom LUT working (vs just the build in ones)
-
-
 Try with just images
-Try to get OSX photos to import directly
-
 
 I want the user to be able to cycle through possible selections for the 3 sources they are going to use for the video to be rendered before it starts. We can just present them with 1 randomly selected source video at a randomly selected start frame, and they can press (enter) if they like it, or (n) to b presented with another option. They do until they have selected 3 options:
 

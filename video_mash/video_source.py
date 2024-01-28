@@ -16,4 +16,4 @@ class VideoSource:
         return self.video_reader.get_frame(self.starting_frame)
 
     def release(self):
-        pass  # VideoReader instances will be managed centrally
+        self.video_reader.release()

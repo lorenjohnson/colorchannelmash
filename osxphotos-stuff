@@ -1,11 +1,11 @@
-osxphotos export --album "videoruin set 1" \
+osxphotos export \
 --only-movies \
 --download-missing \
 --touch-file  \
 --skip-original-if-edited \
 --update \
 --add-missing-to-album "videoruin-missing" \
-source
+/Volumes/spareroom/temp
 
  --config-only --save-config CONFIG_FILE 
 
