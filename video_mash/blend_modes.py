@@ -6,11 +6,11 @@ def before(images):
     Check for a single image or blank images and return the appropriate result.
     """
     if len(images) == 1:
-        return images[0].copy()  # Combine handle_single_image functionality directly
+        return images[0].copy()
 
     non_blank_images = [image for image in images if not (np.all(image == 0) or np.all(image == 255))]
     if not non_blank_images:
-        return np.zeros_like(images[0])
+        return np.zeros_like(images[0], dtype=np.uint8)
 
     return non_blank_images
 

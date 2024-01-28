@@ -10,25 +10,18 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-
 from alive_progress import alive_bar
-from . import blend_modes
+import blend_modes
+
+from . import blend_modes as mash_blend_modes
 from . import image_utils
 from . import video_mash_metadata
-from .video_reader import VideoReader, FileOpenException, GetFrameException
+from .video_reader import VideoReader, FileOpenException
 from .video_source import VideoSource
 from .webcam_capture import WebcamCapture
 
 class ExitException(Exception):
     pass
-
-# effects=args.effects,
-# brightness=args.brightness,
-# contrast=args.contrast,
-# seconds=args.seconds,
-# fps=args.fps,
-# width=args.width,
-# height=args.height,
 
 class VideoMash:
     def __init__(self, **kwargs):
@@ -264,25 +257,61 @@ class VideoMash:
 
     def mash_frames(self, provided_mashed_frame, new_frame, layer_index):
         channel_index = layer_index % 3
+
+        # setup for blend_modes
+        mode = self.mode[0]
+        
         if provided_mashed_frame is None:
-            mashed_frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+            if mode in ['multiply', 'darken_only']:
+                # Black Image
+                # For blend modes that rely on the content of the first image to produce meaningful results, setting the first
+                # image to all black may result in the second image dominating the blend. Blend modes that involve multiplication
+                # or darkening effects may be suitable for an all-black first image.
+                mashed_frame = np.zeros_like(new_frame)
+            elif mode in ['add', 'lighten_only']:
+                # All White Image
+                # Blend modes that involve addition or lightening effects might be suitable for an all-white first image.
+                # Setting the first image to all white can be a good choice when you want the second image to have a strong influence
+                # on the result.
+                mashed_frame = np.ones_like(new_frame) * 255
+            else:
+                # All Gray Image
+                # An all-gray first image (mid-gray, RGB(128, 128, 128)) can be a neutral starting point. It may not bias the blend toward
+                # dark or light, and it can be used as a baseline for various blend modes. This can be suitable for blend modes that involve
+                # both lightening and darkening effects, such as overlay or soft light.
+                mashed_frame = np.ones_like(new_frame) * 128
         else:
             mashed_frame = provided_mashed_frame.copy()
-
-        blend_mode = getattr(blend_modes, self.mode)
-        mashed_frame = blend_mode([mashed_frame, new_frame])
         
+        if mode in ['channels']:
+            mashed_frame = mash_blend_modes.add_image_as_color_channel(mashed_frame, new_frame, channel_index)
+        # Previously only used for "gray": accumulate the intensity values
+        elif mode in ['accumulate']:
+            mashed_frame[:, :, channel_index] += new_frame[:, :, channel_index]
+        else:
+            mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_BGR2BGRA)
+            mashed_frame = np.array(mashed_frame)
+            mashed_frame = mashed_frame.astype(float)
+
+            new_frame = cv2.cvtColor(new_frame, cv2.COLOR_BGR2BGRA)
+            new_frame = np.array(new_frame)
+            new_frame = new_frame.astype(float)
+
+            blend_mode = getattr(blend_modes, mode)
+            mashed_frame = blend_mode(mashed_frame, new_frame, 0.5)
+            
+            mashed_frame = mashed_frame[:, :, :3]
+            mashed_frame = mashed_frame.astype(np.uint8)
+            
+            new_frame = new_frame[:, :, :3]
+            new_frame = new_frame.astype(np.uint8)
+            
         for effect in self.effects:
-            if effect in ['channels']:
-                mashed_frame = blend_modes.add_image_as_color_channel(mashed_frame, new_frame, channel_index)
             if effect.lower() in ['invert']:
                 mashed_frame[:, :, :] = 255 - mashed_frame[:, :, :]
             if effect.lower() in ['hls', 'yuv']:
                 mashed_frame = cv2.cvtColor(mashed_frame, getattr(cv2, f'COLOR_BGR2{effect.upper()}'))
             if effect.lower() in ['gray']:
-                # For grayscale, accumulate the intensity values
-                mashed_frame[:, :, channel_index] += new_frame[:, :, channel_index]
-                # Convert to grayscale color image
                 mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_BGR2GRAY)
                 mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_GRAY2BGR)
             if effect.lower() in ['ocean']:

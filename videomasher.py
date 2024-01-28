@@ -47,15 +47,16 @@ def parse_args():
     parser.add_argument(
         "--mode",
         nargs='+',
-        choices=['multiply', 'average', 'channel', 'overlay', 'screen', 'softlight'],
-        default='multiply',
+        choices=['channels', 'accumulate', 'soft_light', 'lighten_only', 'dodge', 'addition', 'darken_only', 'multiply', 'hard_light',
+            'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal'],
+        default=['channels'],
         help="Set the mash mode. Optional, defaults to multiply.")
     parser.add_argument(
         "--effects",
         nargs='+',
-        choices=['rgb', 'hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean', 'channels'],
-        default=['rgb'],
-        help="Set which effect(s) to apply to each frame. Currently just colormodes. Options: hsv, hls, rgb, yuv, gray. Optional, defaults to rgb.")
+        choices=['hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean'],
+        default=[],
+        help="Set which effect(s) to apply to each frame. Currently just colormodes. Options: hsv, hls, rgb, yuv, gray. Optional, defaults to None.")
     parser.add_argument(
         "--brightness",
         type=float,
