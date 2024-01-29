@@ -1,12 +1,4 @@
-import argparse
-import json
-import os
 import random
-import re
-import shlex
-import subprocess
-
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -32,6 +24,7 @@ class VideoMash:
             'width': 1242,
             'height': 2688,
             'mode': 'multiply',
+            'opacity': 0.5,
             'fps': 30,
             'mode': 'multiply',
             # TODO: Implement effects, currently only color_mode
@@ -244,17 +237,6 @@ class VideoMash:
             #     cv2.destroyAllWindows()
             #     return True
 
-    def process_source_frame(self, frame, layer_index):
-        if self.brightness:
-            frame = image_utils.adjust_brightness(frame, self.brightness)
-        if self.contrast:
-            frame = image_utils.adjust_contrast(frame, self.contrast)
-
-        frame = self.resize_and_crop_frame(frame)
-        # frame = image_utils.keep_color_channels_separated(frame)
-        # frame = image_utils.apply_colormap(frame)
-        return frame
-
     def mash_frames(self, provided_mashed_frame, new_frame, layer_index):
         channel_index = layer_index % 3
 
@@ -298,7 +280,7 @@ class VideoMash:
             new_frame = new_frame.astype(float)
 
             blend_mode = getattr(blend_modes, mode)
-            mashed_frame = blend_mode(mashed_frame, new_frame, 0.5)
+            mashed_frame = blend_mode(mashed_frame, new_frame, self.opacity)
             
             mashed_frame = mashed_frame[:, :, :3]
             mashed_frame = mashed_frame.astype(np.uint8)
@@ -318,6 +300,37 @@ class VideoMash:
                 mashed_frame = image_utils.apply_colormap(mashed_frame, cv2.COLORMAP_OCEAN)
 
         return mashed_frame
+
+    def get_and_process_frame(self, video_source, layer_index):
+        # TODO: Track down where this gets closed and if it should be
+        # Check if the VideoReader is still valid
+        if not video_source.video_reader.cap.isOpened():
+            # Reopen the file
+            print(f"reopening video {video_source.source_path}")
+            video_source.video_reader = VideoReader.get_instance(video_source.source_path)
+
+        # print(video_source.source_path, layer_index, video_source.starting_frame)
+
+        frame = video_source.get_frame()
+
+        if frame is None:
+            return None
+
+        # Apply any processing to the frame
+        frame = self.process_source_frame(frame, layer_index)
+        
+        return frame
+
+    def process_source_frame(self, frame, layer_index):
+        if self.brightness:
+            frame = image_utils.adjust_brightness(frame, self.brightness)
+        if self.contrast:
+            frame = image_utils.adjust_contrast(frame, self.contrast)
+
+        frame = self.resize_and_crop_frame(frame)
+        # frame = image_utils.keep_color_channels_separated(frame)
+        # frame = image_utils.apply_colormap(frame)
+        return frame
 
     def resize_and_crop_frame(self, frame, rotate_fit=False):
         try:
@@ -368,23 +381,3 @@ class VideoMash:
         except Exception as e:
             print(f"Error in resize_and_crop_frame: {e}")
             return None
-
-    def get_and_process_frame(self, video_source, layer_index):
-        # TODO: Track down where this gets closed and if it should be
-        # Check if the VideoReader is still valid
-        if not video_source.video_reader.cap.isOpened():
-            # Reopen the file
-            print(f"reopening video {video_source.source_path}")
-            video_source.video_reader = VideoReader.get_instance(video_source.source_path)
-
-        # print(video_source.source_path, layer_index, video_source.starting_frame)
-
-        frame = video_source.get_frame()
-
-        if frame is None:
-            return None
-
-        # Apply any processing to the frame
-        frame = self.process_source_frame(frame, layer_index)
-        
-        return frame

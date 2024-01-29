@@ -1,8 +1,6 @@
 from typing import List
 import cv2
 import os
-import shlex
-import subprocess
 import numpy as np
 
 class WebcamCapture:

@@ -16,7 +16,7 @@ def parse_args():
         nargs='?',
         const=True,
         help="Use movies in the current Apple Photos Library as source (MacOS only). "
-             "If a file path follows, it will be used as the Apple Photos Library path.")
+                "If a file path follows, it will be used as the Apple Photos Library path.")
     parser.add_argument(
         "sourceGlob",
         nargs='*',
@@ -50,13 +50,18 @@ def parse_args():
         choices=['channels', 'accumulate', 'soft_light', 'lighten_only', 'dodge', 'addition', 'darken_only', 'multiply', 'hard_light',
             'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal'],
         default=['channels'],
-        help="Set the mash mode. Optional, defaults to multiply.")
+        help="Set the mash mode, can be combined with a amount param (0-0.99), e.g. \"--mode soft-light:0.7\". Optional, defaults to channels.")
+    parser.add_argument(
+        "--opacity",
+        type=float,
+        default=0.5,
+        help="Set opacity for the foreground layers for the blend mode. Optional, defaults to 0.5.")
     parser.add_argument(
         "--effects",
         nargs='+',
         choices=['hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean'],
         default=[],
-        help="Set which effect(s) to apply to each frame. Currently just colormodes. Options: hsv, hls, rgb, yuv, gray. Optional, defaults to None.")
+        help="Set effect(s) to apply to each frame. Options: hsv, hls, yuv, gray, invert, ocean. Optional, defaults to None.")
     parser.add_argument(
         "--brightness",
         type=float,
@@ -120,6 +125,7 @@ def main():
                     output_path=output_path,
                     mash_file=args.mashFile,
                     mode=args.mode,
+                    opacity=args.opacity,
                     effects=args.effects,
                     brightness=args.brightness,
                     contrast=args.contrast,
@@ -151,14 +157,14 @@ def get_apple_photos_movies(dbfile = None):
     for movie in movies:
         path = None
         if movie.hasadjustments:
-          path = movie.path_edited
+            path = movie.path_edited
         else:
-          path = movie.path
+            path = movie.path
         if (path is None):
-          print(f"ismissing: {movie.ismissing}, isreference: {movie.isreference}, hidden: {movie.hidden}, shared: {movie.shared}")
+            print(f"ismissing: {movie.ismissing}, isreference: {movie.isreference}, hidden: {movie.hidden}, shared: {movie.shared}")
         else:
-          paths.append(path)
-          
+            paths.append(path)
+
     return paths
 
 if __name__ == "__main__":

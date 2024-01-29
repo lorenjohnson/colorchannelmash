@@ -1,3 +1,5 @@
+Feature: Add typing (pip install pyre-check)
+
 Bug: Back/forward from render state still sometimes index goes out of range
 Feature: Moshing / more creative destruction chaos to files
 Feature: Mash files...
@@ -10,6 +12,8 @@ Feature: Change colorSpace CLI arg to colorMode
   rgb (default) gray, hsl, yuv, map_ocean (etc, cv2 builtins), <custom_lut_filepath>
 Feature: Change color modes on the fly
 Feature: Add still images animation: Decay them over time, extending the current colorchannelmash script?
+
+Feature: Make stand-alone installer / runner / release path
 
 LIVE
   How to speed-up rendering

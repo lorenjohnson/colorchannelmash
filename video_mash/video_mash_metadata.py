@@ -1,7 +1,6 @@
 from typing import Dict
 import os
 import subprocess
-import shlex
 import json
 
 # TODO: Confirm all options are storing and rehydrating
@@ -53,30 +52,30 @@ def write(video_mash):
             save_path.unlink()
 
 def read(file_path):
-  try:
-      metadata = _read_raw_metadata(file_path)
+    try:
+        metadata = _read_raw_metadata(file_path)
 
-      if metadata:
-          metatags = metadata.get('tags')
-          if metatags:
-              mash_data = {}
-              mash_data['source_paths'] = metatags.get('source_paths').split(',')
-              mash_data['starting_frames'] = list(map(int, metatags.get('starting_frames').split(',')))
-              mash_data['seconds'] = float(metatags.get('seconds'))
-              mash_data['width'] = int(metatags.get('width'))
-              mash_data['height'] = int(metatags.get('height'))
-              mash_data['effects'] = metatags.get('effects')
-              mash_data['fps'] = float(metatags.get('fps'))
-              mash_data['mode'] = 'multiply'
+        if metadata:
+            metatags = metadata.get('tags')
+            if metatags:
+                mash_data = {}
+                mash_data['source_paths'] = metatags.get('source_paths').split(',')
+                mash_data['starting_frames'] = list(map(int, metatags.get('starting_frames').split(',')))
+                mash_data['seconds'] = float(metatags.get('seconds'))
+                mash_data['width'] = int(metatags.get('width'))
+                mash_data['height'] = int(metatags.get('height'))
+                mash_data['effects'] = metatags.get('effects')
+                mash_data['fps'] = float(metatags.get('fps'))
+                mash_data['mode'] = 'multiply'
 
-              return mash_data
-          else:
-              return False
-      else:
-          return False
-  except Exception as e:
-      print(f"!!! exception {e}")
-      return False
+                return mash_data
+            else:
+                return False
+        else:
+            return False
+    except Exception as e:
+        print(f"!!! exception {e}")
+        return False
 
 def _read_raw_metadata(file_path) -> Dict:
     ffprobe_cmd = [

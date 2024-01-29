@@ -13,7 +13,6 @@ bpylist2==4.1.1
 bump2version==1.0.1
 bumpversion==0.6.0
 cachetools==5.3.1
-certifi @ file:///private/tmp/python-certifi-20231211-17899-xpo1ul/certifi-2023.11.17
 cffi==1.16.0
 charset-normalizer==3.2.0
 chime==0.7.0
