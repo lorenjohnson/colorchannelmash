@@ -1,4 +1,7 @@
+import os
 import random
+import tempfile
+import shutil
 
 import cv2
 import numpy as np
@@ -32,7 +35,9 @@ class VideoMash:
             # TODO: Currently ignored
             'brightness': 0.45,
             'contrast': 0.2,
-            'webcam_enabled': True
+            'webcam_enabled': True,
+            # Not yet implemented to CLI
+            'auto': False
         }
 
         # Create a new dictionary with default values
@@ -64,6 +69,7 @@ class VideoMash:
         if self.webcam_enabled:
             self.webcam_capture = WebcamCapture(self.width, self.height, self.fps, self.seconds)
         self.selected_sources = []
+        self.preprocessed_selected_sources = []
         self.layer_mashes = []
 
         # TODO: Fix mash_file handling
@@ -71,14 +77,23 @@ class VideoMash:
         #     for layer_index, source_path in enumerate(self.source_paths):
         #         source = VideoSource(source_path, self.starting_frames[layer_index])
         #         self.selected_sources.append(source)
-        #         current_frame = self.get_and_process_frame(source, layer_index)
+        #         current_frame = self.get_source_frame(source, layer_index)
         #         self.layer_mashes.append(
         #             self.mash_frames(self.layer_mashes[layer_index], current_frame, layer_index)
         #         )
+        if self.auto:
+            self.random_sources()
+            
+
+    def random_sources(self):
+        for _ in range(3):
+            random_source_path = random.choice(self.source_paths)
+            current_source = VideoSource(random_source_path)
+            self.selected_sources.append(current_source)
+        return self.selected_sources
 
     def select_sources(self):
         layer_index = max(len(self.selected_sources) - 1, 0)
-        preview_frame = None
         current_source = None
 
         while True:
@@ -95,7 +110,10 @@ class VideoMash:
                     previous_mash = self.layer_mashes[layer_index - 1] 
                 else:
                     previous_mash = None
-                current_frame = self.get_and_process_frame(current_source, layer_index)
+
+                current_frame = current_source.get_frame()
+                current_frame = self.process_source_frame(current_frame, layer_index)
+
                 next_mash = self.mash_frames(previous_mash, current_frame, layer_index)
                 if next_mash.shape[0] < 10:
                     raise Exception("Preview frame is empty (0 height)")
@@ -152,55 +170,54 @@ class VideoMash:
         return self.selected_sources
 
     def mash(self):
-        # Randomly select source videos and channel indices
-        if len(self.selected_sources) < 1:
-            self.select_sources()
-        # try:
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(str(self.output_path), fourcc, self.fps, (self.width, self.height), isColor=True)
-    
-        # Calculate the number of frames needed for the desired duration
-        total_frames = int(self.fps * self.seconds)
+        try:
+            # Randomly select source videos and channel indices
+            if len(self.selected_sources) < 1:
+                self.select_sources()
 
-        print("(Esc) Stop and delete video, keep generating sets")
-        print("(k) Stop and keep video")
+            self.preprocess_selected_sources()
 
-        with alive_bar(total_frames) as bar:
-            for _ in range(total_frames):
-                mashed_frame = None
+            # try:
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            writer = cv2.VideoWriter(str(self.output_path), fourcc, self.fps, (self.width, self.height), isColor=True)
+        
+            # Calculate the number of frames needed for the desired duration
+            total_frames = int(self.fps * self.seconds)
 
-                for index, video_source in enumerate(self.selected_sources):
-                    current_frame = self.get_and_process_frame(video_source, index)
-                    if current_frame is None:
-                        continue
+            print("(Esc) Stop and delete video, keep generating sets")
+            print("(k) Stop and keep video")
 
-                    mashed_frame = self.mash_frames(mashed_frame, current_frame, index)
-                    video_source.starting_frame += 1
+            with alive_bar(total_frames) as bar:
+                for _ in range(total_frames):
+                    mashed_frame = None
 
-                writer.write(mashed_frame)
-                bar()
+                    for index, video_source in enumerate(self.preprocessed_selected_sources):
+                        current_frame = video_source.get_frame()
 
-                if not mashed_frame is None:
-                    preview_result = self.preview_frame(mashed_frame)
-                    if preview_result == True:
-                        break
-                    elif preview_result == False:
-                        return False
+                        if current_frame is None:
+                            continue
 
-        writer.release()
-        cv2.destroyAllWindows()
-        video_mash_metadata.write(self)
+                        mashed_frame = self.mash_frames(mashed_frame, current_frame, index)
+                        video_source.starting_frame += 1
 
-        # Release VideoReader instances when done
-        for video_source in self.selected_sources:
-            video_source.release()
+                    writer.write(mashed_frame)
+                    bar()
 
-        return True
+                    if not mashed_frame is None:
+                        preview_result = self.preview_frame(mashed_frame)
+                        if preview_result == True:
+                            break
+                        elif preview_result == False:
+                            return False
 
-        # finally:
-        #   # Release VideoReader instances when done
-        #   for video_source in self.selected_sources:
-        #       video_source.release()
+            writer.release()
+            cv2.destroyAllWindows()
+            video_mash_metadata.write(self)
+
+            return True
+
+        finally:
+            self.cleanup()
 
     def preview_frame(self, frame):
         rendering_title = "(Esc) Pause | (d) Stop and Delete | (k) Stop and Keep"
@@ -244,7 +261,7 @@ class VideoMash:
         mode = self.mode[0]
         
         if provided_mashed_frame is None:
-            if mode in ['multiply', 'darken_only']:
+            if mode in ['multiply', 'darken_only', 'channels']:
                 # Black Image
                 # For blend modes that rely on the content of the first image to produce meaningful results, setting the first
                 # image to all black may result in the second image dominating the blend. Blend modes that involve multiplication
@@ -272,11 +289,9 @@ class VideoMash:
             mashed_frame[:, :, channel_index] += new_frame[:, :, channel_index]
         else:
             mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_BGR2BGRA)
-            mashed_frame = np.array(mashed_frame)
             mashed_frame = mashed_frame.astype(float)
 
             new_frame = cv2.cvtColor(new_frame, cv2.COLOR_BGR2BGRA)
-            new_frame = np.array(new_frame)
             new_frame = new_frame.astype(float)
 
             blend_mode = getattr(blend_modes, mode)
@@ -301,25 +316,17 @@ class VideoMash:
 
         return mashed_frame
 
-    def get_and_process_frame(self, video_source, layer_index):
-        # TODO: Track down where this gets closed and if it should be
-        # Check if the VideoReader is still valid
-        if not video_source.video_reader.cap.isOpened():
-            # Reopen the file
-            print(f"reopening video {video_source.source_path}")
-            video_source.video_reader = VideoReader.get_instance(video_source.source_path)
+    def cleanup(self):
+        # Release original sources
+        for selected_source in self.selected_sources:
+            selected_source.release()
+        # Release and delete preprocessed selected sources
+        if len(self.preprocessed_selected_sources) > 0:
+            shutil.rmtree(os.path.dirname(self.preprocessed_selected_sources[0].source_path))
+            for selected_source_preprocessed in self.preprocessed_selected_sources:
+                selected_source_preprocessed.release()
 
-        # print(video_source.source_path, layer_index, video_source.starting_frame)
-
-        frame = video_source.get_frame()
-
-        if frame is None:
-            return None
-
-        # Apply any processing to the frame
-        frame = self.process_source_frame(frame, layer_index)
-        
-        return frame
+    # Source Preprocessing
 
     def process_source_frame(self, frame, layer_index):
         if self.brightness:
@@ -327,12 +334,12 @@ class VideoMash:
         if self.contrast:
             frame = image_utils.adjust_contrast(frame, self.contrast)
 
-        frame = self.resize_and_crop_frame(frame)
+        frame = self.resize_and_crop_source_frame(frame)
         # frame = image_utils.keep_color_channels_separated(frame)
         # frame = image_utils.apply_colormap(frame)
         return frame
 
-    def resize_and_crop_frame(self, frame, rotate_fit=False):
+    def resize_and_crop_source_frame(self, frame, rotate_fit=False):
         try:
             target_height = self.height
             target_width = self.width
@@ -379,5 +386,48 @@ class VideoMash:
 
             return result_frame
         except Exception as e:
-            print(f"Error in resize_and_crop_frame: {e}")
+            print(f"Error in resize_and_crop_source_frame: {e}")
             return None
+
+    def preprocess_selected_sources(self):
+        # Create a temporary directory to store processed video files
+        temp_dir = tempfile.mkdtemp(prefix="VideoMash-")
+
+        for layer_index, selected_source in enumerate(self.selected_sources):
+            source_path = selected_source.source_path
+            source_filename = os.path.basename(source_path)  # Get the filename of the source
+
+            # Append "-resized" before the prefix and create a VideoWriter
+            temp_file_path = os.path.join(temp_dir, f"{source_filename}-resized_temp_video_{layer_index}.mp4")
+            
+            # Initialize VideoCapture to read the video file
+            video_capture = cv2.VideoCapture(source_path)
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            writer = cv2.VideoWriter(temp_file_path, fourcc, 30, (self.width, self.height), isColor=True)
+
+            total_frames = int(self.fps * self.seconds)
+            with alive_bar(total_frames) as bar:
+                for _ in range(total_frames):
+                    # Read the next frame
+                    success, frame = video_capture.read()
+
+                    # Break the loop if no more frames are available
+                    if not success:
+                        break
+
+                    processed_frame = self.process_source_frame(frame, layer_index)
+
+                    # Write the processed frame to the temporary file
+                    writer.write(processed_frame)
+                    bar()
+
+            # Release the VideoCapture and VideoWriter instances
+            video_capture.release()
+            writer.release()
+
+            shutil.copystat(source_path, temp_file_path)
+            self.preprocessed_selected_sources.append(
+                VideoSource(temp_file_path, selected_source.starting_frame)
+            )
+
+        return True

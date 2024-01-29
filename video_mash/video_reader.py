@@ -21,8 +21,22 @@ class VideoReader:
         starting_frame %= self.total_frames
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
         ret, frame = self.cap.read()
+        
+        # TODO: Track down where this gets closed and if it should be
+        # Check if the VideoReader is still valid
+        # if not self.cap.isOpened():
+        #     # Reopen the file
+        #     print(f"reopening video {self.source_path}")
+        #     self = VideoReader.get_instance(self.source_path)
+
+        # print(video_source.source_path, layer_index, video_source.starting_frame)
+
         # if not ret:
         #     raise GetFrameException("Error reading frame from video")
+
+        if frame is None:
+            return None
+
         return frame
 
     def release(self):

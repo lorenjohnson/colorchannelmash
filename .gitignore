@@ -1,5 +1,6 @@
 source
 output_video.avi
+auto_output
 output
 keep
 source_sets

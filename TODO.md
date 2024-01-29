@@ -1,4 +1,17 @@
-Feature: Add typing (pip install pyre-check)
+Feature: Automatic mode... using effect hls and mode channels. Think about non-interactive screens... TV watching. DMN
+
+Idea: In terms of alchemy or decomposition process, be able to specify the base layer source directory such that it uses things that were already rendered, and/or water/decomposed stuff as starter
+
+Feature: Explore degredation algorithm within a video render, such that it start re-using frames it has already rendered in composite with later frames...
+Feature: It no clips are longer than the specified <seconds> then limit all clips to the length of the longest selected clip in pre-processing
+Feature: Bring in a new clip when one layer runs out of length (but still let it loop)
+Feature: Re-random start_frame if the one chosen is within the last 80% of the video
+Feature: + / - add remove to length of currently rendering video
+Feature: Multiple source directories (including osxphotos)
+Feature: No save
+Feature: See how I might speed-up the other blend_modes besides channels...
+Feature: Keep audio through pre-processing, and combine in output (Move to MoviePy for pre-processing? Or not. Ask CGPT)
+Feature: Move effects into pre-processing ?
 
 Bug: Back/forward from render state still sometimes index goes out of range
 Feature: Moshing / more creative destruction chaos to files
@@ -70,7 +83,6 @@ Upcoming:
 - Take from another file if one errors on initial load of the 3, will give a more consistelnly rich result
 - Render from more focused sets (current week for instance for Insta posting)
 - Cropping vs getting max frame size
-- Try to render with HSV color space vs RGB
 - Crop one frame from the middle, another from the top and another from the bottom, where applicable
 - Add some contrast to each channel by default
 - Optional effect "hooks": 

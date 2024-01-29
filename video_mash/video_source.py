@@ -12,8 +12,10 @@ class VideoSource:
             else:
                 self.starting_frame = random.randint(0, int(self.video_reader.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
 
-    def get_frame(self):
-        return self.video_reader.get_frame(self.starting_frame)
+    def get_frame(self, provided_starting_frame = None):
+        return self.video_reader.get_frame(
+            provided_starting_frame if provided_starting_frame else self.starting_frame
+        )
 
     def release(self):
         self.video_reader.release()
