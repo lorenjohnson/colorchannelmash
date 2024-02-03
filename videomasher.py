@@ -18,6 +18,11 @@ def parse_args():
         help="Use movies in the current Apple Photos Library as source (MacOS only). "
                 "If a file path follows, it will be used as the Apple Photos Library path.")
     parser.add_argument(
+        "--albums",
+        nargs='+',
+        default=None,
+        help="List of album names to use. If not specified, it will use the last album or all photos. (Apple Photos only)")
+    parser.add_argument(
         "sourceGlob",
         nargs='*',
         default=["source/*.mov"],
@@ -59,7 +64,7 @@ def parse_args():
     parser.add_argument(
         "--effects",
         nargs='+',
-        choices=['hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean'],
+        choices=['hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean', 'rgb'],
         default=[],
         help="Set effect(s) to apply to each frame. Options: hsv, hls, yuv, gray, invert, ocean. Optional, defaults to None.")
     parser.add_argument(
@@ -75,7 +80,7 @@ def parse_args():
     parser.add_argument(
         "--fps",
         type=int,
-        default=30,
+        default=12,
         help="Frames per second for output videos. Optional, defaults to 30.")
     # TODO: Default to loop, then this setting becomes a limit
     parser.add_argument(
@@ -97,9 +102,9 @@ def main():
     source_paths = []
 
     if args.osxphotos is True:
-        source_paths = get_apple_photos_movies()
+        source_paths = get_apple_photos_movies(albums=args.albums)
     elif args.osxphotos is not None:
-        source_paths = get_apple_photos_movies(args.osxphotos)
+        source_paths = get_apple_photos_movies(args.osxphotos, args.albums)
     else:
         for source_glob in args.sourceGlob:
             source_paths.extend(glob.glob(source_glob))
@@ -142,27 +147,25 @@ def main():
             if e: print(f"{e}")
             print("Bye!")
 
-def get_apple_photos_movies(dbfile = None):
+def get_apple_photos_movies(dbfile=None, albums=None):
     if dbfile:
         photosdb = osxphotos.PhotosDB(dbfile=dbfile)
     else:
         photosdb = osxphotos.PhotosDB()
 
-    movies = photosdb.photos(images=False, movies=True)
-    
+    videos = photosdb.photos(images=False, movies=True, albums=albums)
+
     # Filter out None results
-    movies = [movie for movie in movies if movie is not None]
+    videos = [video for video in videos if video is not None]
     paths = []
-    
-    for movie in movies:
+
+    for video in videos:
         path = None
-        if movie.hasadjustments:
-            path = movie.path_edited
+        if video.hasadjustments:
+            path = video.path_edited
         else:
-            path = movie.path
-        if (path is None):
-            print(f"ismissing: {movie.ismissing}, isreference: {movie.isreference}, hidden: {movie.hidden}, shared: {movie.shared}")
-        else:
+            path = video.path
+        if path is not None:
             paths.append(path)
 
     return paths

@@ -1,4 +1,8 @@
+- Clip is never longer than the longest of the selected sources
 Feature: Automatic mode... using effect hls and mode channels. Think about non-interactive screens... TV watching. DMN
+
+  - Multiple OSX photos libraries, Also file paths, all in one combined file list
+  - Clips no longer loop past their total length. new clips are brought in.
 
 Idea: In terms of alchemy or decomposition process, be able to specify the base layer source directory such that it uses things that were already rendered, and/or water/decomposed stuff as starter
 

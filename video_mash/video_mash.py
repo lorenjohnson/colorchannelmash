@@ -11,8 +11,7 @@ import blend_modes
 from . import blend_modes as mash_blend_modes
 from . import image_utils
 from . import video_mash_metadata
-from .video_reader import VideoReader, FileOpenException
-from .video_source import VideoSource
+from .video_source import VideoSource, FileOpenException
 from .webcam_capture import WebcamCapture
 
 class ExitException(Exception):
@@ -26,9 +25,8 @@ class VideoMash:
             'seconds': 10,
             'width': 1242,
             'height': 2688,
-            'mode': 'multiply',
             'opacity': 0.5,
-            'fps': 30,
+            'fps': 12,
             'mode': 'multiply',
             # TODO: Implement effects, currently only color_mode
             'effects': ['rgb'],
@@ -112,7 +110,7 @@ class VideoMash:
                     previous_mash = None
 
                 current_frame = current_source.get_frame()
-                current_frame = self.process_source_frame(current_frame, layer_index)
+                current_frame = self.process_source_frame(current_frame)
 
                 next_mash = self.mash_frames(previous_mash, current_frame, layer_index)
                 if next_mash.shape[0] < 10:
@@ -259,9 +257,9 @@ class VideoMash:
 
         # setup for blend_modes
         mode = self.mode[0]
-        
+
         if provided_mashed_frame is None:
-            if mode in ['multiply', 'darken_only', 'channels']:
+            if mode in ['channels']:
                 # Black Image
                 # For blend modes that rely on the content of the first image to produce meaningful results, setting the first
                 # image to all black may result in the second image dominating the blend. Blend modes that involve multiplication
@@ -281,7 +279,7 @@ class VideoMash:
                 mashed_frame = np.ones_like(new_frame) * 128
         else:
             mashed_frame = provided_mashed_frame.copy()
-        
+
         if mode in ['channels']:
             mashed_frame = mash_blend_modes.add_image_as_color_channel(mashed_frame, new_frame, channel_index)
         # Previously only used for "gray": accumulate the intensity values
@@ -299,10 +297,10 @@ class VideoMash:
             
             mashed_frame = mashed_frame[:, :, :3]
             mashed_frame = mashed_frame.astype(np.uint8)
-            
+
             new_frame = new_frame[:, :, :3]
             new_frame = new_frame.astype(np.uint8)
-            
+
         for effect in self.effects:
             if effect.lower() in ['invert']:
                 mashed_frame[:, :, :] = 255 - mashed_frame[:, :, :]
@@ -313,7 +311,8 @@ class VideoMash:
                 mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_GRAY2BGR)
             if effect.lower() in ['ocean']:
                 mashed_frame = image_utils.apply_colormap(mashed_frame, cv2.COLORMAP_OCEAN)
-
+            if effect.lower() in ['rgb']:
+                mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_BGR2RGB)
         return mashed_frame
 
     def cleanup(self):
@@ -328,11 +327,11 @@ class VideoMash:
 
     # Source Preprocessing
 
-    def process_source_frame(self, frame, layer_index):
-        if self.brightness:
-            frame = image_utils.adjust_brightness(frame, self.brightness)
-        if self.contrast:
-            frame = image_utils.adjust_contrast(frame, self.contrast)
+    def process_source_frame(self, frame):
+        # if self.brightness:
+        #     frame = image_utils.adjust_brightness(frame, self.brightness)
+        # if self.contrast:
+        #     frame = image_utils.adjust_contrast(frame, self.contrast)
 
         frame = self.resize_and_crop_source_frame(frame)
         # frame = image_utils.keep_color_channels_separated(frame)
@@ -353,7 +352,7 @@ class VideoMash:
             #     # Adjust cropping region to move the center 25% up
             #     center_shift = int(0.8 * target_height)
             # else:
-            center_shift = int(0.2 * target_height)
+            center_shift = 0
 
             # Calculate the aspect ratio
             aspect_ratio = width / height
@@ -368,6 +367,10 @@ class VideoMash:
 
             # Resize the frame maintaining aspect ratio
             resized_frame = cv2.resize(frame, (fill_width, fill_height))
+
+            # Check if rotating the image would result in more coverage
+            if rotate_fit and fill_height < target_height:
+                fill_width, fill_height = fill_height, fill_width
 
             # Calculate the cropping region
             start_x = max(0, (fill_width - target_width) // 2)
@@ -389,45 +392,49 @@ class VideoMash:
             print(f"Error in resize_and_crop_source_frame: {e}")
             return None
 
+    def preprocess_source(self, source, layer_index, temp_dir):
+        source_path = source.source_path
+        source_filename = os.path.basename(source_path)  # Get the filename of the source
+
+        # Append "-resized" before the prefix and create a VideoWriter
+        temp_file_path = os.path.join(temp_dir, f"{source_filename}-resized_temp_video_{layer_index}.mp4")
+        
+        # Initialize VideoCapture to read the video file
+        # video_capture = cv2.VideoCapture(source_path)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        writer = cv2.VideoWriter(temp_file_path, fourcc, 30, (self.width, self.height), isColor=True)
+
+        total_frames = int(self.fps * self.seconds)
+        with alive_bar(total_frames) as bar:
+            for _ in range(total_frames):
+                # Read the next frame
+                frame = source.get_frame()
+
+                # Break the loop if no more frames are available
+                if frame is None:
+                    break
+
+                processed_frame = self.process_source_frame(frame)
+
+                # Write the processed frame to the temporary file
+                writer.write(processed_frame)
+                bar()
+
+        # Release the VideoCapture and VideoWriter instances
+        source.release()
+        writer.release()
+
+        shutil.copystat(source_path, temp_file_path)
+
+        return VideoSource(temp_file_path, source.starting_frame)
+
     def preprocess_selected_sources(self):
         # Create a temporary directory to store processed video files
         temp_dir = tempfile.mkdtemp(prefix="VideoMash-")
 
         for layer_index, selected_source in enumerate(self.selected_sources):
-            source_path = selected_source.source_path
-            source_filename = os.path.basename(source_path)  # Get the filename of the source
-
-            # Append "-resized" before the prefix and create a VideoWriter
-            temp_file_path = os.path.join(temp_dir, f"{source_filename}-resized_temp_video_{layer_index}.mp4")
-            
-            # Initialize VideoCapture to read the video file
-            video_capture = cv2.VideoCapture(source_path)
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            writer = cv2.VideoWriter(temp_file_path, fourcc, 30, (self.width, self.height), isColor=True)
-
-            total_frames = int(self.fps * self.seconds)
-            with alive_bar(total_frames) as bar:
-                for _ in range(total_frames):
-                    # Read the next frame
-                    success, frame = video_capture.read()
-
-                    # Break the loop if no more frames are available
-                    if not success:
-                        break
-
-                    processed_frame = self.process_source_frame(frame, layer_index)
-
-                    # Write the processed frame to the temporary file
-                    writer.write(processed_frame)
-                    bar()
-
-            # Release the VideoCapture and VideoWriter instances
-            video_capture.release()
-            writer.release()
-
-            shutil.copystat(source_path, temp_file_path)
             self.preprocessed_selected_sources.append(
-                VideoSource(temp_file_path, selected_source.starting_frame)
+                self.preprocess_source(selected_source, layer_index, temp_dir)
             )
 
         return True
