@@ -51,10 +51,8 @@ def parse_args():
         help="Output video height. Optional, defaults to iPhone 11 Pro Max screen height.")
     parser.add_argument(
         "--mode",
-        nargs='+',
-        choices=['channels', 'accumulate', 'soft_light', 'lighten_only', 'dodge', 'addition', 'darken_only', 'multiply', 'hard_light',
-            'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal'],
-        default=['channels'],
+        choices=VideoMash.MODES,
+        default='channels',
         help="Set the mash mode, can be combined with a amount param (0-0.99), e.g. \"--mode soft-light:0.7\". Optional, defaults to channels.")
     parser.add_argument(
         "--opacity",
@@ -64,7 +62,7 @@ def parse_args():
     parser.add_argument(
         "--effects",
         nargs='+',
-        choices=['hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean', 'rgb'],
+        choices=VideoMash.EFFECTS,
         default=[],
         help="Set effect(s) to apply to each frame. Options: hsv, hls, yuv, gray, invert, ocean. Optional, defaults to None.")
     parser.add_argument(
