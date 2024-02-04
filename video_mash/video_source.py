@@ -48,6 +48,9 @@ class VideoSource:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
         ret, frame = self.cap.read()
 
+        if not ret:
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, frame = self.cap.read()
         # TODO: Add error handling if necessary
 
         return frame
