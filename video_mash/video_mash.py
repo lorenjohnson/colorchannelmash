@@ -41,7 +41,7 @@ class VideoMash:
             'webcam_enabled': True,
             # Not yet implemented to CLI
             'auto': False,
-            'preprocess': True
+            'preprocess': False
         }
 
         # Create a new dictionary with default values
@@ -77,7 +77,7 @@ class VideoMash:
         # TODO: Fix mash_file handling
         # if remash:
         #     for layer_index, source_path in enumerate(self.source_paths):
-        #         source = VideoSource(source_path, self.starting_frames[layer_index])
+        #         source = VideoSource(source_path, starting_frame=self.starting_frames[layer_index])
         #         self.selected_sources.append(source)
         #         current_frame = self.get_source_frame(source, layer_index)
         #         self.layer_mashes.append(
@@ -89,7 +89,7 @@ class VideoMash:
     def random_sources(self):
         for _ in range(3):
             random_source_path = random.choice(self.source_paths)
-            current_source = VideoSource(random_source_path)
+            current_source = VideoSource(random_source_path, self)
             self.selected_sources.append(current_source)
         return self.selected_sources
 
@@ -101,7 +101,7 @@ class VideoMash:
             try:
                 if layer_index >= len(self.selected_sources):
                     random_source_path = random.choice(self.source_paths)
-                    random_source = VideoSource(random_source_path)
+                    random_source = VideoSource(random_source_path, self)
                     self.selected_sources.append(random_source)
             except FileOpenException as e:
                 print(f"Can't open source {random_source_path}, skipping")
@@ -139,7 +139,7 @@ class VideoMash:
                 cv2.destroyAllWindows()
                 self.selected_sources[layer_index].release()
                 webcam_capture_output = self.webcam_capture.capture_and_save_webcam()
-                self.selected_sources[layer_index] = VideoSource(webcam_capture_output, 0)
+                self.selected_sources[layer_index] = VideoSource(webcam_capture_output, video_mash=self, starting_frame=0)
                 continue
             # "p" - Save current frame as a PNG
             elif key == ord('p'):
@@ -154,6 +154,8 @@ class VideoMash:
             # "m" - Next Mode
             elif key == ord('m'):
                 self.get_next_mode()
+            else:
+                print(key)
 
         return self.selected_sources
 
@@ -167,7 +169,7 @@ class VideoMash:
             if index < len(self.selected_sources):
                 source = self.selected_sources[index]
                 frame = source.get_frame() if source.current_frame is None else source.current_frame
-                frame = source.process_frame(frame, self)
+                frame = source.process_frame(frame)
                 mashed_frame = self.mash_frames(previous_mash, frame, index)
 
         return mashed_frame

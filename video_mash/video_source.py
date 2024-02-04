@@ -15,16 +15,16 @@ class GetFrameException(Exception):
 class VideoSource:
     _instances = {}  # Class-level dictionary to store VideoSource instances
 
-    def __init__(self, source_path, starting_frame=None):
+    def __init__(self, source_path, video_mash = None, starting_frame=None):
         self.source_path = source_path
         instance = self.create_or_get_instance(source_path, starting_frame)
         self.cap = instance.cap
+        self.preprocessed_cap = None
+        self.preprocessed_source_path = None
         self.current_frame = None
         self.total_frames = instance.total_frames
         self.starting_frame = instance.starting_frame  # Add this line
-        self.preprocessed_cap = None
-        self.preprocessed_source_path = None
-
+        self.video_mash = video_mash
         if not starting_frame:
             # Set starting_frame to a random valid point in the clip
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, random.randint(0, self.total_frames - 1))
@@ -50,7 +50,7 @@ class VideoSource:
         instance.starting_frame = starting_frame if starting_frame is not None else random.randint(0, instance.total_frames - 1)
         return instance
 
-    def get_frame(self, starting_frame=None, preprocess=False):
+    def get_frame(self, starting_frame=None, preprocessing=False):
         cap = self.preprocessed_cap if self.preprocessed_cap else self.cap
 
         if starting_frame:
@@ -58,14 +58,18 @@ class VideoSource:
             cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
         ret, frame = cap.read()
 
-        if not ret and not preprocess:
+        if not ret and not preprocessing:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = cap.read()
         # TODO: Add error handling if necessary
+
+        if not preprocessing and not self.preprocessed_cap:
+            frame = self.process_frame(frame)
+
         self.current_frame = frame
         return frame
 
-    def preprocess(self, layer_index, temp_dir, video_mash):
+    def preprocess(self, layer_index, temp_dir):
         source_filename = os.path.basename(self.source_path)  # Get the filename of the source
 
         # Append "-resized" before the prefix and create a VideoWriter
@@ -73,19 +77,19 @@ class VideoSource:
         
         # Initialize VideoCapture to read the video file
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(temp_file_path, fourcc, video_mash.fps, (video_mash.width, video_mash.height), isColor=True)
+        writer = cv2.VideoWriter(temp_file_path, fourcc, self.video_mash.fps, (self.video_mash.width, self.video_mash.height), isColor=True)
 
-        total_frames = int(video_mash.fps * video_mash.seconds)
+        total_frames = int(self.video_mash.fps * self.video_mash.seconds)
         with alive_bar(total_frames) as bar:
             for _ in range(total_frames):
                 # Read the next frame
-                frame = self.get_frame(preprocess=True)
+                frame = self.get_frame(preprocessing=True)
 
                 # Break the loop if no more frames are available
                 if frame is None:
                     break
 
-                processed_frame = self.process_frame(frame, video_mash)
+                processed_frame = self.process_frame(frame)
 
                 # Write the processed frame to the temporary file
                 writer.write(processed_frame)
@@ -100,13 +104,13 @@ class VideoSource:
 
         return True
 
-    def process_frame(self, frame, video_mash):
+    def process_frame(self, frame):
         # if self.brightness:
         #     frame = image_utils.adjust_brightness(frame, self.brightness)
         # if self.contrast:
         #     frame = image_utils.adjust_contrast(frame, self.contrast)
 
-        frame = image_utils.resize_and_crop(frame, video_mash.height, video_mash.width)
+        frame = image_utils.resize_and_crop(frame, self.video_mash.height, self.video_mash.width)
         # frame = image_utils.keep_color_channels_separated(frame)
         # frame = image_utils.apply_colormap(frame)
         return frame
