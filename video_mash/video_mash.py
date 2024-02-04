@@ -18,6 +18,11 @@ class ExitException(Exception):
     pass
 
 class VideoMash:
+    MODES = ['channels', 'accumulate', 'soft_light', 'lighten_only', 'dodge', 'addition', 'darken_only', 'multiply', 'hard_light',
+            'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal']
+
+    EFFECTS = ['hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean', 'rgb']
+
     def __init__(self, **kwargs):
         default_values = {
             'source_paths': None,
@@ -164,8 +169,31 @@ class VideoMash:
                 cv2.destroyAllWindows()
                 self.selected_sources.append(current_source)
                 break
+            elif key == ord('e'):
+                # layer_index = 0
+                self.get_next_effect()
+            elif key == ord('m'):
+                # layer_index = 0
+                self.get_next_mode()
 
         return self.selected_sources
+
+    def get_next_effect(self):
+        effects_count = len(self.effects)
+        if effects_count > 0:
+            curent_index = self.EFFECTS.index(self.effects[effects_count - 1])
+            next_index = (curent_index + 1) % len(self.EFFECTS)
+            self.effects[effects_count - 1] = self.EFFECTS[next_index]
+        else:
+            self.effects[self.EFFECTS[0]]
+            
+        return self.effects
+
+    def get_next_mode(self):
+        current_index = self.MODES.index(self.mode)
+        next_index = (current_index + 1) % len(self.MODES)
+        self.mode = self.MODES[next_index]
+        return self.mode
 
     def mash(self):
         try:
@@ -256,7 +284,7 @@ class VideoMash:
         channel_index = layer_index % 3
 
         # setup for blend_modes
-        mode = self.mode[0]
+        mode = self.mode
 
         if provided_mashed_frame is None:
             if mode in ['channels']:
