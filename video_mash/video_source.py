@@ -1,5 +1,10 @@
+import os
 import cv2
 import random
+import shutil
+
+from alive_progress import alive_bar
+from . import image_utils
 
 class FileOpenException(Exception):
     pass
@@ -14,8 +19,11 @@ class VideoSource:
         self.source_path = source_path
         instance = self.create_or_get_instance(source_path, starting_frame)
         self.cap = instance.cap
+        self.current_frame = None
         self.total_frames = instance.total_frames
         self.starting_frame = instance.starting_frame  # Add this line
+        self.preprocessed_cap = None
+        self.preprocessed_source_path = None
 
         if not starting_frame:
             # Set starting_frame to a random valid point in the clip
@@ -42,21 +50,77 @@ class VideoSource:
         instance.starting_frame = starting_frame if starting_frame is not None else random.randint(0, instance.total_frames - 1)
         return instance
 
-    def get_frame(self, starting_frame=None):
+    def get_frame(self, starting_frame=None, preprocess=False):
+        cap = self.preprocessed_cap if self.preprocessed_cap else self.cap
+
         if starting_frame:
             starting_frame %= self.total_frames
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
-        ret, frame = self.cap.read()
+            cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
+        ret, frame = cap.read()
 
-        if not ret:
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ret, frame = self.cap.read()
+        if not ret and not preprocess:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, frame = cap.read()
         # TODO: Add error handling if necessary
+        self.current_frame = frame
+        return frame
 
+    def preprocess(self, layer_index, temp_dir, video_mash):
+        source_filename = os.path.basename(self.source_path)  # Get the filename of the source
+
+        # Append "-resized" before the prefix and create a VideoWriter
+        temp_file_path = os.path.join(temp_dir, f"{source_filename}-resized_temp_video_{layer_index}.mp4")
+        
+        # Initialize VideoCapture to read the video file
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        writer = cv2.VideoWriter(temp_file_path, fourcc, video_mash.fps, (video_mash.width, video_mash.height), isColor=True)
+
+        total_frames = int(video_mash.fps * video_mash.seconds)
+        with alive_bar(total_frames) as bar:
+            for _ in range(total_frames):
+                # Read the next frame
+                frame = self.get_frame(preprocess=True)
+
+                # Break the loop if no more frames are available
+                if frame is None:
+                    break
+
+                processed_frame = self.process_frame(frame, video_mash)
+
+                # Write the processed frame to the temporary file
+                writer.write(processed_frame)
+                bar()
+
+        self.cap.release()
+        writer.release()
+        
+        shutil.copystat(self.source_path, temp_file_path)
+        self.preprocessed_source_path = temp_file_path
+        self.preprocessed_cap = cv2.VideoCapture(self.preprocessed_source_path)
+
+        return True
+
+    def process_frame(self, frame, video_mash):
+        # if self.brightness:
+        #     frame = image_utils.adjust_brightness(frame, self.brightness)
+        # if self.contrast:
+        #     frame = image_utils.adjust_contrast(frame, self.contrast)
+
+        frame = image_utils.resize_and_crop(frame, video_mash.height, video_mash.width)
+        # frame = image_utils.keep_color_channels_separated(frame)
+        # frame = image_utils.apply_colormap(frame)
         return frame
 
     def release(self):
-        self.cap.release()
-        # Remove instance from the dictionary if exists
+        if self.cap: self.cap.release()
+        # Release and delete preprocessed
+        if self.preprocessed_cap:
+            self.preprocessed_cap.release()
+            try:
+                # Attempt to remove the directory
+                shutil.rmtree(os.path.dirname(self.preprocessed_source_path))
+            except FileNotFoundError:
+                # Ignore the error if the directory was already deleted
+                pass        # Remove instance from the dictionary if exists
         if self.source_path in self._instances:
             del self._instances[self.source_path]

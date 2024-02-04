@@ -1,13 +1,64 @@
 import cv2
 import numpy as np
 import dlib
-from skimage import color
+# from skimage import color
 from skimage import img_as_ubyte
 from sklearn.cluster import KMeans
 
 # cv2.COLORMAP_HOT
 def apply_colormap(image, colormap=cv2.COLORMAP_OCEAN):
     return cv2.applyColorMap(image, colormap)
+
+def resize_and_crop(frame, target_height=None, target_width=None, rotate_fit=False):
+    try:
+        # frame = image_utils.zoom_image_on_face(frame)
+        # Get frame dimensions
+        height, width = frame.shape[:2]
+
+        # # Check if a person is present
+        # if image_utils.is_person_present(frame):
+        #     # Adjust cropping region to move the center 25% up
+        #     center_shift = int(0.8 * target_height)
+        # else:
+        center_shift = 0
+
+        # Calculate the aspect ratio
+        aspect_ratio = width / height
+
+        # Calculate the new dimensions to fill the target size
+        fill_width = target_width
+        fill_height = int(fill_width / aspect_ratio)
+
+        if fill_height < target_height:
+            fill_height = target_height
+            fill_width = int(fill_height * aspect_ratio)
+
+        # Resize the frame maintaining aspect ratio
+        resized_frame = cv2.resize(frame, (fill_width, fill_height))
+
+        # Check if rotating the image would result in more coverage
+        if rotate_fit and fill_height < target_height:
+            fill_width, fill_height = fill_height, fill_width
+
+        # Calculate the cropping region
+        start_x = max(0, (fill_width - target_width) // 2)
+        start_y = max(0, (fill_height - target_height) // 2 - center_shift)
+        end_x = min(fill_width, start_x + target_width)
+        end_y = min(fill_height, start_y + target_height)
+
+        # Crop the frame to the target size
+        cropped_frame = resized_frame[start_y:end_y, start_x:end_x]
+
+        # Create a blank frame of the target size
+        result_frame = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+
+        # Place the cropped frame in the center of the blank frame
+        result_frame[:end_y-start_y, :end_x-start_x] = cropped_frame
+
+        return result_frame
+    except Exception as e:
+        print(f"Error in resize_and_crop_source_frame: {e}")
+        return None
 
 def zoom_image_on_face(image, zoom_percentage=20, preview=False):
     detector = dlib.get_frontal_face_detector()

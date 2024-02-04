@@ -40,7 +40,8 @@ class VideoMash:
             'contrast': 0.2,
             'webcam_enabled': True,
             # Not yet implemented to CLI
-            'auto': False
+            'auto': False,
+            'preprocess': True
         }
 
         # Create a new dictionary with default values
@@ -60,7 +61,7 @@ class VideoMash:
         #         init_values.update(mash_data)
 
         if not len(init_values['source_paths']) > 0:
-            raise Exception("At least one source_file must be provided")
+            raise Exception("At least one source_path must be provided")
 
         if not init_values['output_path']:
             raise Exception("Must provide an output_path")
@@ -72,8 +73,6 @@ class VideoMash:
         if self.webcam_enabled:
             self.webcam_capture = WebcamCapture(self.width, self.height, self.fps, self.seconds)
         self.selected_sources = []
-        self.preprocessed_selected_sources = []
-        self.layer_mashes = []
 
         # TODO: Fix mash_file handling
         # if remash:
@@ -86,7 +85,6 @@ class VideoMash:
         #         )
         if self.auto:
             self.random_sources()
-            
 
     def random_sources(self):
         for _ in range(3):
@@ -95,88 +93,101 @@ class VideoMash:
             self.selected_sources.append(current_source)
         return self.selected_sources
 
-    def select_sources(self):
+
+    def select_layers(self):
         layer_index = max(len(self.selected_sources) - 1, 0)
-        current_source = None
 
         while True:
             try:
-                if not current_source:
+                if layer_index >= len(self.selected_sources):
                     random_source_path = random.choice(self.source_paths)
-                    current_source = VideoSource(random_source_path)
+                    random_source = VideoSource(random_source_path)
+                    self.selected_sources.append(random_source)
             except FileOpenException as e:
                 print(f"Can't open source {random_source_path}, skipping")
                 continue
 
-            try:
-                if layer_index > 0:
-                    previous_mash = self.layer_mashes[layer_index - 1] 
-                else:
-                    previous_mash = None
-
-                current_frame = current_source.get_frame()
-                current_frame = self.process_source_frame(current_frame)
-
-                next_mash = self.mash_frames(previous_mash, current_frame, layer_index)
-                if next_mash.shape[0] < 10:
-                    raise Exception("Preview frame is empty (0 height)")
-            except Exception as e:
-                print(f"Can't get preview frame: {e}")
-                current_source.release()
-                current_source = None
-                continue
+            current_mash = self.preview_layers(layer_index)
 
             window_title = f"Layer {layer_index}: (Space) Next Option | (Enter) Select | (Esc) Go back layer | (s) Start render | (c) Switch to Webcam"
-            cv2.imshow(window_title, next_mash)
+            cv2.imshow(window_title, current_mash)
             key = cv2.waitKey(0) & 0xFF
 
             # Enter - select current image as the layer and moves to next layer selection
             if key == 13:
                 cv2.destroyAllWindows()
-                self.layer_mashes.append(next_mash.copy())
-                self.selected_sources.append(current_source)
-                current_source = None
                 layer_index += 1
                 continue
             # Esc - goes back a layer removing the previously selected source for that layer
             elif key == 27:
+                cv2.destroyAllWindows()
+                source = self.selected_sources.pop()
+                source.release()
                 if layer_index == 0:
-                    current_source.release()
                     raise ExitException
-                current_source.release()
-                current_source = self.selected_sources.pop()
-                self.layer_mashes.pop()
                 layer_index -= 1
                 continue
             # Space - shows next source option for this layer
             elif key == ord(' '):
                 cv2.destroyAllWindows()
-                if layer_index < len(self.selected_sources):
-                    del self.selected_sources[layer_index]
-                current_source.release()
-                current_source = None
+                self.selected_sources[layer_index].release()
+                del self.selected_sources[layer_index]
                 continue
             # "c" - Source from webcam
             elif key == ord('c'):
                 print("beginning capture from webcam")
                 cv2.destroyAllWindows()
-                current_source.release()
+                self.selected_sources[layer_index].release()
                 webcam_capture_output = self.webcam_capture.capture_and_save_webcam()
-                current_source = VideoSource(webcam_capture_output, 0)
+                self.selected_sources[layer_index] = VideoSource(webcam_capture_output, 0)
                 continue
+            # "p" - Save current frame as a PNG
+            elif key == ord('p'):
+                self.save_screenshot(current_mash)
             # "s" - Starts render
-            elif key == ord('s') and layer_index > 0:
+            elif key == ord('s'):
                 cv2.destroyAllWindows()
-                self.selected_sources.append(current_source)
                 break
+            # "e" - Next Effect
             elif key == ord('e'):
-                # layer_index = 0
                 self.get_next_effect()
+            # "m" - Next Mode
             elif key == ord('m'):
-                # layer_index = 0
                 self.get_next_mode()
 
         return self.selected_sources
+
+    def preview_layers(self, layer_index = None):
+        layer_index = len(self.selected_source) if layer_index is None else layer_index
+        mashed_frame = None
+
+        for index in range(layer_index + 1):
+            previous_mash = mashed_frame
+
+            if index < len(self.selected_sources):
+                source = self.selected_sources[index]
+                frame = source.get_frame() if source.current_frame is None else source.current_frame
+                frame = source.process_frame(frame, self)
+                mashed_frame = self.mash_frames(previous_mash, frame, index)
+
+        return mashed_frame
+
+    def save_screenshot(self, mashed_frame):
+        output_filename = self.output_path.stem  # Get the filename without extension
+
+        existing_screenshots = [file for file in self.output_path.parent.glob(f"{output_filename}.screenshot-*.png")]
+
+        screenshot_number = 1
+        if existing_screenshots:
+            latest_screenshot = max(existing_screenshots)
+            parts = latest_screenshot.stem.split('-')
+            screenshot_number = int(parts[-1]) + 1
+
+        screenshot_filename = f"{output_filename}.screenshot-{screenshot_number:03d}.png"
+        screenshot_path = self.output_path.parent / screenshot_filename
+        cv2.imwrite(str(screenshot_path), mashed_frame)
+        print(f"Frame saved as {screenshot_path}")
+
 
     def get_next_effect(self):
         effects_count = len(self.effects)
@@ -185,7 +196,7 @@ class VideoMash:
             next_index = (curent_index + 1) % len(self.EFFECTS)
             self.effects[effects_count - 1] = self.EFFECTS[next_index]
         else:
-            self.effects[self.EFFECTS[0]]
+            self.effects = [self.EFFECTS[0]]
             
         return self.effects
 
@@ -199,9 +210,9 @@ class VideoMash:
         try:
             # Randomly select source videos and channel indices
             if len(self.selected_sources) < 1:
-                self.select_sources()
+                self.select_layers()
 
-            self.preprocess_selected_sources()
+            if self.preprocess: self.preprocess_selected_sources()
 
             # try:
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -217,7 +228,7 @@ class VideoMash:
                 for _ in range(total_frames):
                     mashed_frame = None
 
-                    for index, video_source in enumerate(self.preprocessed_selected_sources):
+                    for index, video_source in enumerate(self.selected_sources):
                         current_frame = video_source.get_frame()
 
                         if current_frame is None:
@@ -268,7 +279,7 @@ class VideoMash:
                     self.output_path.unlink()
                     print(f"{self.output_path} discarded, recomposing from here")
                 cv2.destroyAllWindows()
-                self.select_sources()
+                self.select_layers()
                 # return False
             elif pause_key == ord('q'):
                 if self.output_path.exists():
@@ -347,122 +358,14 @@ class VideoMash:
         # Release original sources
         for selected_source in self.selected_sources:
             selected_source.release()
-        # Release and delete preprocessed selected sources
-        if len(self.preprocessed_selected_sources) > 0:
-            shutil.rmtree(os.path.dirname(self.preprocessed_selected_sources[0].source_path))
-            for selected_source_preprocessed in self.preprocessed_selected_sources:
-                selected_source_preprocessed.release()
 
     # Source Preprocessing
-
-    def process_source_frame(self, frame):
-        # if self.brightness:
-        #     frame = image_utils.adjust_brightness(frame, self.brightness)
-        # if self.contrast:
-        #     frame = image_utils.adjust_contrast(frame, self.contrast)
-
-        frame = self.resize_and_crop_source_frame(frame)
-        # frame = image_utils.keep_color_channels_separated(frame)
-        # frame = image_utils.apply_colormap(frame)
-        return frame
-
-    def resize_and_crop_source_frame(self, frame, rotate_fit=False):
-        try:
-            target_height = self.height
-            target_width = self.width
-
-            # frame = image_utils.zoom_image_on_face(frame)
-            # Get frame dimensions
-            height, width = frame.shape[:2]
-
-            # # Check if a person is present
-            # if image_utils.is_person_present(frame):
-            #     # Adjust cropping region to move the center 25% up
-            #     center_shift = int(0.8 * target_height)
-            # else:
-            center_shift = 0
-
-            # Calculate the aspect ratio
-            aspect_ratio = width / height
-
-            # Calculate the new dimensions to fill the target size
-            fill_width = target_width
-            fill_height = int(fill_width / aspect_ratio)
-
-            if fill_height < target_height:
-                fill_height = target_height
-                fill_width = int(fill_height * aspect_ratio)
-
-            # Resize the frame maintaining aspect ratio
-            resized_frame = cv2.resize(frame, (fill_width, fill_height))
-
-            # Check if rotating the image would result in more coverage
-            if rotate_fit and fill_height < target_height:
-                fill_width, fill_height = fill_height, fill_width
-
-            # Calculate the cropping region
-            start_x = max(0, (fill_width - target_width) // 2)
-            start_y = max(0, (fill_height - target_height) // 2 - center_shift)
-            end_x = min(fill_width, start_x + target_width)
-            end_y = min(fill_height, start_y + target_height)
-
-            # Crop the frame to the target size
-            cropped_frame = resized_frame[start_y:end_y, start_x:end_x]
-
-            # Create a blank frame of the target size
-            result_frame = np.zeros((target_height, target_width, 3), dtype=np.uint8)
-
-            # Place the cropped frame in the center of the blank frame
-            result_frame[:end_y-start_y, :end_x-start_x] = cropped_frame
-
-            return result_frame
-        except Exception as e:
-            print(f"Error in resize_and_crop_source_frame: {e}")
-            return None
-
-    def preprocess_source(self, source, layer_index, temp_dir):
-        source_path = source.source_path
-        source_filename = os.path.basename(source_path)  # Get the filename of the source
-
-        # Append "-resized" before the prefix and create a VideoWriter
-        temp_file_path = os.path.join(temp_dir, f"{source_filename}-resized_temp_video_{layer_index}.mp4")
-        
-        # Initialize VideoCapture to read the video file
-        # video_capture = cv2.VideoCapture(source_path)
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(temp_file_path, fourcc, 30, (self.width, self.height), isColor=True)
-
-        total_frames = int(self.fps * self.seconds)
-        with alive_bar(total_frames) as bar:
-            for _ in range(total_frames):
-                # Read the next frame
-                frame = source.get_frame()
-
-                # Break the loop if no more frames are available
-                if frame is None:
-                    break
-
-                processed_frame = self.process_source_frame(frame)
-
-                # Write the processed frame to the temporary file
-                writer.write(processed_frame)
-                bar()
-
-        # Release the VideoCapture and VideoWriter instances
-        source.release()
-        writer.release()
-
-        shutil.copystat(source_path, temp_file_path)
-
-        return VideoSource(temp_file_path, source.starting_frame)
 
     def preprocess_selected_sources(self):
         # Create a temporary directory to store processed video files
         temp_dir = tempfile.mkdtemp(prefix="VideoMash-")
 
         for layer_index, selected_source in enumerate(self.selected_sources):
-            self.preprocessed_selected_sources.append(
-                self.preprocess_source(selected_source, layer_index, temp_dir)
-            )
+            selected_source.preprocess(layer_index, temp_dir, self)
 
         return True
