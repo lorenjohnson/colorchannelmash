@@ -109,7 +109,6 @@ class VideoSource:
         #     frame = image_utils.adjust_brightness(frame, self.brightness)
         # if self.contrast:
         #     frame = image_utils.adjust_contrast(frame, self.contrast)
-
         frame = image_utils.resize_and_crop(frame, self.video_mash.height, self.video_mash.width)
         # frame = image_utils.keep_color_channels_separated(frame)
         # frame = image_utils.apply_colormap(frame)

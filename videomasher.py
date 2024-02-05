@@ -135,7 +135,7 @@ def main():
                     seconds=args.seconds,
                     fps=args.fps,
                     width=args.width,
-                    height=args.height,
+                    height=args.height
                 )
                 success = video_mash.mash()
 

@@ -1,7 +1,5 @@
-import os
 import random
 import tempfile
-import shutil
 
 import cv2
 import numpy as np
@@ -22,6 +20,15 @@ class VideoMash:
             'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal']
 
     EFFECTS = ['rgb', 'hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean']
+    EFFECT_COMBOS = [
+        ['hls', 'rgb'],
+        ['invert', 'hls', 'rgb'],
+        ['hsv', 'rgb'],
+        ['invert', 'hsv', 'rgb'],
+        ['yuv', 'rgb'],
+        ['invert', 'yuv', 'rgb'],
+        [],
+    ] + [[effect] for effect in EFFECTS]
 
     def __init__(self, **kwargs):
         default_values = {
@@ -104,7 +111,9 @@ class VideoMash:
             current_mash = self.preview_layers(layer_index)
 
             window_title = f"Layer {layer_index}: (Space) Next Option | (Enter) Select | (Esc) Go back layer | (s) Start render | (c) Switch to Webcam"
+            cv2.namedWindow(window_title, cv2.WINDOW_NORMAL)
             cv2.imshow(window_title, current_mash)
+            cv2.resizeWindow(window_title, 1280, 720)
             key = cv2.waitKey(0) & 0xFF
 
             # Enter - select current image as the layer and moves to next layer selection
@@ -187,18 +196,18 @@ class VideoMash:
 
     def get_next_effect(self):
         effects_count = len(self.effects)
-        if effects_count > 0:
-            curent_index = self.EFFECTS.index(self.effects[effects_count - 1])
-            next_index = (curent_index + 1) % len(self.EFFECTS)
-            self.effects[effects_count - 1] = self.EFFECTS[next_index]
-        else:
-            self.effects = [self.EFFECTS[0]]
+        current_index = self.EFFECT_COMBOS.index(self.effects) if effects_count > 0 and self.effects in self.EFFECT_COMBOS else -1
+        next_index = (current_index + 1) % len(self.EFFECT_COMBOS)
+        self.effects = self.EFFECT_COMBOS[next_index]
+        print(f"Effects: {self.effects}")
+
         return self.effects
 
     def get_next_mode(self):
         current_index = self.MODES.index(self.mode)
         next_index = (current_index + 1) % len(self.MODES)
         self.mode = self.MODES[next_index]
+        print(f"Mode: {self.mode}")
         return self.mode
 
     def mash(self):
@@ -253,7 +262,9 @@ class VideoMash:
 
     def preview_frame(self, frame):
         rendering_title = "(Esc) Pause | (d) Stop and Delete | (k) Stop and Keep"
+        cv2.namedWindow(rendering_title, cv2.WINDOW_NORMAL)
         cv2.imshow(rendering_title, frame)
+        cv2.resizeWindow(rendering_title, 1280, 720)
         key = cv2.waitKey(1)
 
         if key ==  ord('d'):
@@ -361,6 +372,6 @@ class VideoMash:
         temp_dir = tempfile.mkdtemp(prefix="VideoMash-")
 
         for layer_index, selected_source in enumerate(self.selected_sources):
-            selected_source.preprocess(layer_index, temp_dir, self)
+            selected_source.preprocess(layer_index, temp_dir)
 
         return True
