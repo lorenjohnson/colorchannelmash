@@ -1,21 +1,23 @@
-- Clip is never longer than the longest of the selected sources
+Feature: Look into mashfile starting frame inconsistency? 
+Feature: Make mashfile restore more robust to failures of effects and blend modes...
+Feature: Ctrl-C asks to save file
+Feature: Explore keep_color_channels_separated color reduction as one stage of alchemic transmformation (for instance can compose more images in later generations once colors have been reduced in individual mashes / images)
+
+Feature: Save Mash data in screenshot file as well
+Feature: GUI Show current settings and button to "save mash"
 Feature: Automatic mode... using effect hls and mode channels. Think about non-interactive screens... TV watching. DMN
+Feature: Multiple OSX photos libraries? (confirm multiple source directories already)
 
-  - Multiple OSX photos libraries, Also file paths, all in one combined file list
-  - Clips no longer loop past their total length. new clips are brought in.
+Feature: Option to specify a base layer
 
-Idea: In terms of alchemy or decomposition process, be able to specify the base layer source directory such that it uses things that were already rendered, and/or water/decomposed stuff as starter
-
-Feature: Explore degredation algorithm within a video render, such that it start re-using frames it has already rendered in composite with later frames...
-Feature: It no clips are longer than the specified <seconds> then limit all clips to the length of the longest selected clip in pre-processing
-Feature: Bring in a new clip when one layer runs out of length (but still let it loop)
-Feature: Re-random start_frame if the one chosen is within the last 80% of the video
-Feature: + / - add remove to length of currently rendering video
-Feature: Multiple source directories (including osxphotos)
-Feature: No save
+Video specific:
 Feature: See how I might speed-up the other blend_modes besides channels...
+Feature: Explore degredation algorithm within a video render, such that it start re-using frames it has already rendered in composite with later frames...
 Feature: Keep audio through pre-processing, and combine in output (Move to MoviePy for pre-processing? Or not. Ask CGPT)
-Feature: Move effects into pre-processing ?
+Feature: Re-random start_frame if the one chosen is within the last 80% of the video?
+Feature: Clips no longer loop past their total length. new clips are brought in.
+Feature: Bring in a new clip when one layer runs out of length (but still let it loop to the total length of the clip)
+Feature: + / - add remove to length of currently rendering video
 
 Bug: Back/forward from render state still sometimes index goes out of range
 Feature: Moshing / more creative destruction chaos to files

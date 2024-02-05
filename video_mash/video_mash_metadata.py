@@ -57,6 +57,7 @@ def read(file_path):
 
         if metadata:
             metatags = metadata.get('tags')
+            print(metadata)
             if metatags:
                 mash_data = {}
                 mash_data['source_paths'] = metatags.get('source_paths').split(',')
@@ -64,9 +65,10 @@ def read(file_path):
                 mash_data['seconds'] = float(metatags.get('seconds'))
                 mash_data['width'] = int(metatags.get('width'))
                 mash_data['height'] = int(metatags.get('height'))
-                mash_data['effects'] = metatags.get('effects')
+                mash_data['effects'] = list(map(str, metatags.get('effects').split(',')))
                 mash_data['fps'] = float(metatags.get('fps'))
-                mash_data['mode'] = 'multiply'
+                # Parsing out extra characters from when mode was an array
+                mash_data['mode'] = metatags.get('mode').replace("'", "").strip("[]")
 
                 return mash_data
             else:

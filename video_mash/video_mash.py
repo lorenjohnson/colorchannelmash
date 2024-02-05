@@ -21,7 +21,7 @@ class VideoMash:
     MODES = ['channels', 'accumulate', 'soft_light', 'lighten_only', 'dodge', 'addition', 'darken_only', 'multiply', 'hard_light',
             'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal']
 
-    EFFECTS = ['hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean', 'rgb']
+    EFFECTS = ['rgb', 'hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean']
 
     def __init__(self, **kwargs):
         default_values = {
@@ -50,16 +50,6 @@ class VideoMash:
         # Update init_values with provided keyword arguments
         init_values.update(kwargs)
         
-        # TODO: Test and Fix mashfile handling
-        # TODO: Add JSON mashfile handling
-        # Update from mashfile if exists, set remash to True
-        # remash = False
-        # if len(source_paths) == 1:
-        #     mash_data = video_mash_metadata.read(mash_file)
-        #     if mash_data:
-        #         remash = True
-        #         init_values.update(mash_data)
-
         if not len(init_values['source_paths']) > 0:
             raise Exception("At least one source_path must be provided")
 
@@ -74,17 +64,21 @@ class VideoMash:
             self.webcam_capture = WebcamCapture(self.width, self.height, self.fps, self.seconds)
         self.selected_sources = []
 
-        # TODO: Fix mash_file handling
-        # if remash:
-        #     for layer_index, source_path in enumerate(self.source_paths):
-        #         source = VideoSource(source_path, starting_frame=self.starting_frames[layer_index])
-        #         self.selected_sources.append(source)
-        #         current_frame = self.get_source_frame(source, layer_index)
-        #         self.layer_mashes.append(
-        #             self.mash_frames(self.layer_mashes[layer_index], current_frame, layer_index)
-        #         )
-        if self.auto:
-            self.random_sources()
+        if len(self.source_paths) == 1:
+            mash_data = video_mash_metadata.read(self.source_paths[0])
+            if mash_data:
+                self.seconds = mash_data.get('seconds')
+                self.effects = mash_data.get('effects')
+                self.mode = mash_data.get('mode')
+                self.fps = mash_data.get('fps')
+                for index, source_path in enumerate(mash_data.get('source_paths')):
+                    starting_frame = mash_data.get('starting_frames')[index]
+                    self.selected_sources.append(
+                        VideoSource(source_path, video_mash=self, starting_frame=starting_frame)
+                    )
+
+        # if self.auto:
+        #     self.random_sources()
 
     def random_sources(self):
         for _ in range(3):
@@ -199,7 +193,6 @@ class VideoMash:
             self.effects[effects_count - 1] = self.EFFECTS[next_index]
         else:
             self.effects = [self.EFFECTS[0]]
-            
         return self.effects
 
     def get_next_mode(self):
@@ -211,8 +204,8 @@ class VideoMash:
     def mash(self):
         try:
             # Randomly select source videos and channel indices
-            if len(self.selected_sources) < 1:
-                self.select_layers()
+            # if len(self.selected_sources) < 1:
+            self.select_layers()
 
             if self.preprocess: self.preprocess_selected_sources()
 

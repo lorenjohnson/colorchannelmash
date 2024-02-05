@@ -23,7 +23,7 @@ class VideoSource:
         self.preprocessed_source_path = None
         self.current_frame = None
         self.total_frames = instance.total_frames
-        self.starting_frame = instance.starting_frame  # Add this line
+        self.starting_frame = instance.starting_frame
         self.video_mash = video_mash
         if not starting_frame:
             # Set starting_frame to a random valid point in the clip

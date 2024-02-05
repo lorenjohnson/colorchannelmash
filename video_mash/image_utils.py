@@ -104,7 +104,16 @@ def randomly_dispose_pixels(image, percentage):
     return modified_image
 
 def keep_color_channels_separated(image):
+    if image is None:
+        return None  # or raise an appropriate exception
+
+    if image.ndim == 2:
+        return np.zeros_like(image, dtype=np.uint8)
+    
     if image.ndim == 3:
+        if image.shape[-1] != 3:
+            raise ValueError("Unsupported number of color channels. Only 3 channels are supported.")
+        
         flattened_image = image.reshape((-1, 3))
         num_colors = 8
         kmeans = KMeans(n_clusters=num_colors, random_state=0).fit(flattened_image)
@@ -113,14 +122,9 @@ def keep_color_channels_separated(image):
         quantized_image = img_as_ubyte(normalized_image)
 
         return quantized_image
-    elif image.ndim == 2:
-        image[:, :] -= image[:, :]
-    else:
-        raise ValueError("Unsupported array dimensionality. Only 2D and 3D arrays are supported.")
 
-    image = np.clip(image, 0, 255)
+    raise ValueError("Unsupported array dimensionality. Only 2D and 3D arrays are supported.")
 
-    return image
 
 def keep_color_channels_separated_alt(image):
     if image.ndim == 3:
