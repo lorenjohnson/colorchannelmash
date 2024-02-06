@@ -19,7 +19,7 @@ class VideoMash:
     MODES = ['channels', 'accumulate', 'soft_light', 'lighten_only', 'dodge', 'addition', 'darken_only', 'multiply', 'hard_light',
             'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal']
 
-    EFFECTS = ['rgb', 'hsv', 'hls', 'yuv', 'gray', 'invert', 'ocean']
+    EFFECTS = ['rgb', 'hsv', 'hls', 'yuv', 'gray', 'invert', 'jpeg', 'ocean']
     EFFECT_COMBOS = [
         ['hls', 'rgb'],
         ['invert', 'hls', 'rgb'],
@@ -343,10 +343,14 @@ class VideoMash:
             mashed_frame = mashed_frame[:, :, :3]
             mashed_frame = mashed_frame.astype(np.uint8)
 
-            new_frame = new_frame[:, :, :3]
-            new_frame = new_frame.astype(np.uint8)
+            # NOTE: Not necessary to convert new_frame back at this time
+            # new_frame = new_frame[:, :, :3]
+            # new_frame = new_frame.astype(np.uint8)
 
+        # TODO: Add as an effect option
         for effect in self.effects:
+            if effect.lower() in ['jpeg']:
+                mashed_frame = image_utils.mjpeg_compression(mashed_frame, 45)
             if effect.lower() in ['invert']:
                 mashed_frame[:, :, :] = 255 - mashed_frame[:, :, :]
             if effect.lower() in ['hls', 'yuv']:

@@ -60,6 +60,26 @@ def resize_and_crop(frame, target_height=None, target_width=None, rotate_fit=Fal
         print(f"Error in resize_and_crop_source_frame: {e}")
         return None
 
+def mjpeg_compression(image, quality=1):
+    """
+    Apply MJPEG compression to the input image.
+    
+    Parameters:
+        image (numpy.ndarray): Input image in OpenCV format (BGR).
+        quality (int): JPEG quality parameter (0-100), where 0 is the lowest quality and 100 is the highest (default: 1).
+    
+    Returns:
+        numpy.ndarray: Compressed image in OpenCV format (BGR).
+    """
+    # Convert image to JPEG with specified quality
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+    _, result = cv2.imencode('.jpg', image, encode_param)
+    
+    # Convert JPEG data back to a image
+    result = cv2.imdecode(result, cv2.IMREAD_COLOR)
+    
+    return result
+
 def zoom_image_on_face(image, zoom_percentage=20, preview=False):
     detector = dlib.get_frontal_face_detector()
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
