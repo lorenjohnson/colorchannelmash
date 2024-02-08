@@ -364,7 +364,7 @@ class VideoMash:
                 mashed_frame = image_utils.mjpeg_compression(mashed_frame, 45)
             if effect.lower() in ['invert']:
                 mashed_frame[:, :, :] = 255 - mashed_frame[:, :, :]
-            if effect.lower() in ['hls', 'yuv']:
+            if effect.lower() in ['hsv', 'hls', 'yuv']:
                 mashed_frame = cv2.cvtColor(mashed_frame, getattr(cv2, f'COLOR_BGR2{effect.upper()}'))
             if effect.lower() in ['gray']:
                 mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_BGR2GRAY)

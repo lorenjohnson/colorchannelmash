@@ -1,3 +1,4 @@
+Feature: Save last settings used and use as defaults on next run
 Feature: Look into mashfile starting frame inconsistency? 
 Feature: Make mashfile restore more robust to failures of effects and blend modes...
 Feature: Ctrl-C asks to save file
