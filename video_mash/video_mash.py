@@ -21,15 +21,15 @@ class VideoMash:
 
     EFFECTS = ['rgb', 'hsv', 'hls', 'yuv', 'gray', 'invert', 'jpeg', 'ocean']
     EFFECT_COMBOS = [
+        [],
         ['hls', 'rgb'],
         ['invert', 'hls', 'rgb'],
         ['hsv', 'rgb'],
         ['invert', 'hsv', 'rgb'],
         ['yuv', 'rgb'],
         ['invert', 'yuv', 'rgb'],
-        [],
     ] + [[effect] for effect in EFFECTS]
-
+    print(EFFECT_COMBOS)
     def __init__(self, **kwargs):
         default_values = {
             'source_paths': None,
@@ -151,14 +151,25 @@ class VideoMash:
             elif key == ord('s'):
                 cv2.destroyAllWindows()
                 break
-            # "e" - Next Effect
-            elif key == ord('e'):
-                self.get_next_effect()
             # "m" - Next Mode
             elif key == ord('m'):
                 self.get_next_mode()
             else:
-                print(key)
+                # "e" - Next Effect
+                if key == ord('e'):
+                    self.get_next_effect()
+                elif key == ord('0'):
+                    self.effects = []
+                    print(self.effects)
+                elif ord('1') <= key <= ord('8'):
+                    effect_index = key - ord('1') # Adjust the index to match the list
+                    if self.EFFECTS[effect_index] in self.effects:
+                        self.effects.remove(self.EFFECTS[effect_index])
+                    else:
+                        self.effects.append(self.EFFECTS[effect_index])
+                    print(self.effects)
+                else:
+                    print(key)
 
         return self.selected_sources
 
@@ -196,7 +207,7 @@ class VideoMash:
 
     def get_next_effect(self):
         effects_count = len(self.effects)
-        current_index = self.EFFECT_COMBOS.index(self.effects) if effects_count > 0 and self.effects in self.EFFECT_COMBOS else -1
+        current_index = self.EFFECT_COMBOS.index(self.effects) if effects_count > 0 and self.effects in self.EFFECT_COMBOS else 0
         next_index = (current_index + 1) % len(self.EFFECT_COMBOS)
         self.effects = self.EFFECT_COMBOS[next_index]
         print(f"Effects: {self.effects}")
