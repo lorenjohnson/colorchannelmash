@@ -22,7 +22,7 @@ class VideoMash:
             'seconds': 10,
             'width': 1242,
             'height': 2688,
-            'opacity': 0.5,
+            'opacity': 1,
             'fps': 12,
             'mode': 'multiply',
             # TODO: Implement effects, currently only color_mode
@@ -143,9 +143,12 @@ class VideoMash:
             elif key == ord('s'):
                 cv2.destroyAllWindows()
                 break
-            # "m" - Next Mode
+            # "m" - Cycle Blend Modes (all layers)
             elif key == ord('m'):
                 self.get_next_mode()
+            # ',' Cycle blending opacity (all layers)
+            elif key == ord(','):
+                self.opacity = (self.opacity + 0.1) % 1.0
             else:
                 # "e" - Next Effect
                 if key == ord('e'):

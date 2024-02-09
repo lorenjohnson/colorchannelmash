@@ -35,7 +35,7 @@ def apply(mode_name, provided_image, new_image, layer_index, opacity=0.5):
 
     if provided_image is None:
         # Handle blank initial image
-        if mode_name in ['channels']:
+        if mode_name in ['channels', 'multiply']:
             # Black Image
             image = np.zeros_like(new_image)
         elif mode_name in ['add', 'lighten_only']:

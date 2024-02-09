@@ -52,7 +52,7 @@ def parse_args():
     parser.add_argument(
         "--mode",
         choices=BLEND_MODES,
-        default='difference',
+        default='multiply',
         help="Set the mash mode, can be combined with a amount param (0-0.99), e.g. \"--mode soft-light:0.7\". Optional, defaults to channels.")
     parser.add_argument(
         "--opacity",
@@ -63,7 +63,7 @@ def parse_args():
         "--effects",
         nargs='+',
         choices=EFFECTS,
-        default=EFFECT_COMBOS[1],
+        default=EFFECT_COMBOS[0],
         help="Set effect(s) to apply to each frame. Options: hsv, hls, yuv, gray, invert, ocean. Optional, defaults to None.")
     parser.add_argument(
         "--brightness",
