@@ -1,3 +1,6 @@
+Bug: Back out of a render to recompose. Crashes on metadata write, but probably because file doesn't close properly
+Feature: Make window full screen with F
+
 Feature: Save last settings used and use as defaults on next run. OR Save Settings?
 
 Feature: Look into mashfile starting frame inconsistency? 
