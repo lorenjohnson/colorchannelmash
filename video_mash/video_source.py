@@ -58,10 +58,16 @@ class VideoSource:
             cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
         ret, frame = cap.read()
 
+        if ret and frame is None:
+            print('no frame (1st instance)', self.source_path, self.starting_frame)
+
         if not ret and not preprocessing:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = cap.read()
-        # TODO: Add error handling if necessary
+        
+        # TODO: If fails here, try and figure out why
+        if frame is None:
+            print('no frame', self.source_path, self.starting_frame)
 
         if not preprocessing and not self.preprocessed_cap:
             frame = self.process_frame(frame)

@@ -4,10 +4,9 @@ import tempfile
 import cv2
 import numpy as np
 from alive_progress import alive_bar
-import blend_modes
 
-from . import blend_modes as mash_blend_modes
-from . import image_utils
+from . import blend_modes
+from . import effects
 from . import video_mash_metadata
 from .video_source import VideoSource, FileOpenException
 from .webcam_capture import WebcamCapture
@@ -16,20 +15,6 @@ class ExitException(Exception):
     pass
 
 class VideoMash:
-    MODES = ['channels', 'accumulate', 'soft_light', 'lighten_only', 'dodge', 'addition', 'darken_only', 'multiply', 'hard_light',
-            'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal']
-
-    EFFECTS = ['rgb', 'hsv', 'hls', 'yuv', 'gray', 'invert', 'jpeg', 'ocean']
-    EFFECT_COMBOS = [
-        [],
-        ['hls', 'rgb'],
-        ['invert', 'hls', 'rgb'],
-        ['hsv', 'rgb'],
-        ['invert', 'hsv', 'rgb'],
-        ['yuv', 'rgb'],
-        ['invert', 'yuv', 'rgb'],
-    ] + [[effect] for effect in EFFECTS]
-    print(EFFECT_COMBOS)
     def __init__(self, **kwargs):
         default_values = {
             'source_paths': None,
@@ -47,7 +32,7 @@ class VideoMash:
             'contrast': 0.2,
             'webcam_enabled': True,
             # Not yet implemented to CLI
-            'auto': False,
+            'auto': 1,
             'preprocess': False
         }
 
@@ -84,14 +69,16 @@ class VideoMash:
                         VideoSource(source_path, video_mash=self, starting_frame=starting_frame)
                     )
 
-        # if self.auto:
-        #     self.random_sources()
+        if self.auto > 1:
+            self.random_sources(self.auto)
 
-    def random_sources(self):
-        for _ in range(3):
+    def random_sources(self, layers):
+        for _ in range(layers):
             random_source_path = random.choice(self.source_paths)
             current_source = VideoSource(random_source_path, self)
             self.selected_sources.append(current_source)
+            self.effects = random.choice(effects.EFFECT_COMBOS)
+            self.mode = random.choice(blend_modes.BLEND_MODES)
         return self.selected_sources
 
 
@@ -144,6 +131,11 @@ class VideoMash:
                 webcam_capture_output = self.webcam_capture.capture_and_save_webcam()
                 self.selected_sources[layer_index] = VideoSource(webcam_capture_output, video_mash=self, starting_frame=0)
                 continue
+            elif key == ord('d'):
+                cv2.destroyAllWindows()
+                self.reset()
+                self.random_sources(self.auto)
+                continue
             # "p" - Save current frame as a PNG
             elif key == ord('p'):
                 self.save_screenshot(current_mash)
@@ -163,10 +155,11 @@ class VideoMash:
                     print(self.effects)
                 elif ord('1') <= key <= ord('8'):
                     effect_index = key - ord('1') # Adjust the index to match the list
-                    if self.EFFECTS[effect_index] in self.effects:
-                        self.effects.remove(self.EFFECTS[effect_index])
+                    # self.effects.append(effects.EFFECTS[effect_index])                    
+                    if effects.EFFECTS[effect_index] in self.effects:
+                        self.effects.remove(effects.EFFECTS[effect_index])
                     else:
-                        self.effects.append(self.EFFECTS[effect_index])
+                        self.effects.append(effects.EFFECTS[effect_index])
                     print(self.effects)
                 else:
                     print(key)
@@ -207,17 +200,17 @@ class VideoMash:
 
     def get_next_effect(self):
         effects_count = len(self.effects)
-        current_index = self.EFFECT_COMBOS.index(self.effects) if effects_count > 0 and self.effects in self.EFFECT_COMBOS else 0
-        next_index = (current_index + 1) % len(self.EFFECT_COMBOS)
-        self.effects = self.EFFECT_COMBOS[next_index]
+        current_index = effects.EFFECT_COMBOS.index(self.effects) if effects_count > 0 and self.effects in effects.EFFECT_COMBOS else 0
+        next_index = (current_index + 1) % len(effects.EFFECT_COMBOS)
+        self.effects = effects.EFFECT_COMBOS[next_index]
         print(f"Effects: {self.effects}")
 
         return self.effects
 
     def get_next_mode(self):
-        current_index = self.MODES.index(self.mode)
-        next_index = (current_index + 1) % len(self.MODES)
-        self.mode = self.MODES[next_index]
+        current_index = blend_modes.BLEND_MODES.index(self.mode)
+        next_index = (current_index + 1) % len(blend_modes.BLEND_MODES)
+        self.mode = blend_modes.BLEND_MODES[next_index]
         print(f"Mode: {self.mode}")
         return self.mode
 
@@ -228,7 +221,8 @@ class VideoMash:
             self.select_layers()
 
             if self.preprocess: self.preprocess_selected_sources()
-
+            for selected_source in self.selected_sources:
+                print(selected_source.source_path)
             # try:
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             writer = cv2.VideoWriter(str(self.output_path), fourcc, self.fps, (self.width, self.height), isColor=True)
@@ -269,7 +263,7 @@ class VideoMash:
             return True
 
         finally:
-            self.cleanup()
+            self.reset()
 
     def preview_frame(self, frame):
         rendering_title = "(Esc) Pause | (d) Stop and Delete | (k) Stop and Keep"
@@ -309,76 +303,18 @@ class VideoMash:
             #     return True
 
     def mash_frames(self, provided_mashed_frame, new_frame, layer_index):
-        channel_index = layer_index % 3
+        mashed_frame = blend_modes.apply(self.mode, provided_mashed_frame, new_frame, layer_index, self.opacity)
 
-        # setup for blend_modes
-        mode = self.mode
-
-        if provided_mashed_frame is None:
-            if mode in ['channels']:
-                # Black Image
-                # For blend modes that rely on the content of the first image to produce meaningful results, setting the first
-                # image to all black may result in the second image dominating the blend. Blend modes that involve multiplication
-                # or darkening effects may be suitable for an all-black first image.
-                mashed_frame = np.zeros_like(new_frame)
-            elif mode in ['add', 'lighten_only']:
-                # All White Image
-                # Blend modes that involve addition or lightening effects might be suitable for an all-white first image.
-                # Setting the first image to all white can be a good choice when you want the second image to have a strong influence
-                # on the result.
-                mashed_frame = np.ones_like(new_frame) * 255
-            else:
-                # All Gray Image
-                # An all-gray first image (mid-gray, RGB(128, 128, 128)) can be a neutral starting point. It may not bias the blend toward
-                # dark or light, and it can be used as a baseline for various blend modes. This can be suitable for blend modes that involve
-                # both lightening and darkening effects, such as overlay or soft light.
-                mashed_frame = np.ones_like(new_frame) * 128
-        else:
-            mashed_frame = provided_mashed_frame.copy()
-
-        if mode in ['channels']:
-            mashed_frame = mash_blend_modes.add_image_as_color_channel(mashed_frame, new_frame, channel_index)
-        # Previously only used for "gray": accumulate the intensity values
-        elif mode in ['accumulate']:
-            mashed_frame[:, :, channel_index] += new_frame[:, :, channel_index]
-        else:
-            mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_BGR2BGRA)
-            mashed_frame = mashed_frame.astype(float)
-
-            new_frame = cv2.cvtColor(new_frame, cv2.COLOR_BGR2BGRA)
-            new_frame = new_frame.astype(float)
-
-            blend_mode = getattr(blend_modes, mode)
-            mashed_frame = blend_mode(mashed_frame, new_frame, self.opacity)
-            
-            mashed_frame = mashed_frame[:, :, :3]
-            mashed_frame = mashed_frame.astype(np.uint8)
-
-            # NOTE: Not necessary to convert new_frame back at this time
-            # new_frame = new_frame[:, :, :3]
-            # new_frame = new_frame.astype(np.uint8)
-
-        # TODO: Add as an effect option
         for effect in self.effects:
-            if effect.lower() in ['jpeg']:
-                mashed_frame = image_utils.mjpeg_compression(mashed_frame, 45)
-            if effect.lower() in ['invert']:
-                mashed_frame[:, :, :] = 255 - mashed_frame[:, :, :]
-            if effect.lower() in ['hsv', 'hls', 'yuv']:
-                mashed_frame = cv2.cvtColor(mashed_frame, getattr(cv2, f'COLOR_BGR2{effect.upper()}'))
-            if effect.lower() in ['gray']:
-                mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_BGR2GRAY)
-                mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_GRAY2BGR)
-            if effect.lower() in ['ocean']:
-                mashed_frame = image_utils.apply_colormap(mashed_frame, cv2.COLORMAP_OCEAN)
-            if effect.lower() in ['rgb']:
-                mashed_frame = cv2.cvtColor(mashed_frame, cv2.COLOR_BGR2RGB)
+            mashed_frame = effects.apply(effect, mashed_frame)
+
         return mashed_frame
 
-    def cleanup(self):
+    def reset(self):
         # Release original sources
         for selected_source in self.selected_sources:
             selected_source.release()
+        self.selected_sources = []
 
     # Source Preprocessing
 

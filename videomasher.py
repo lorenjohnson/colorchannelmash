@@ -5,7 +5,7 @@ import glob
 import cv2
 import osxphotos
 from pathlib import Path
-from video_mash import VideoMash, ExitException
+from video_mash import VideoMash, ExitException, EFFECTS, EFFECT_COMBOS, BLEND_MODES
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Video Masher: A memory machine.")
@@ -51,8 +51,8 @@ def parse_args():
         help="Output video height. Optional, defaults to iPhone 11 Pro Max screen height.")
     parser.add_argument(
         "--mode",
-        choices=VideoMash.MODES,
-        default='channels',
+        choices=BLEND_MODES,
+        default='difference',
         help="Set the mash mode, can be combined with a amount param (0-0.99), e.g. \"--mode soft-light:0.7\". Optional, defaults to channels.")
     parser.add_argument(
         "--opacity",
@@ -62,8 +62,8 @@ def parse_args():
     parser.add_argument(
         "--effects",
         nargs='+',
-        choices=VideoMash.EFFECTS,
-        default=[],
+        choices=EFFECTS,
+        default=EFFECT_COMBOS[1],
         help="Set effect(s) to apply to each frame. Options: hsv, hls, yuv, gray, invert, ocean. Optional, defaults to None.")
     parser.add_argument(
         "--brightness",
@@ -85,7 +85,12 @@ def parse_args():
         "--mashes",
         type=int,
         default=10,
-        help="Total number of mashes to generate. Rendering preview is off if this is set. Optional, defaults to 10.")
+        help="Total number of mashes to generate. Rendering preview is off if this is set. Optional, defaults to 10")
+    parser.add_argument(
+        "--auto",
+        type=int,
+        default=1,
+        help="Automatically setup mashes with this many randomly selected layers")
 
     return parser.parse_args()
 
@@ -135,7 +140,8 @@ def main():
                     seconds=args.seconds,
                     fps=args.fps,
                     width=args.width,
-                    height=args.height
+                    height=args.height,
+                    auto=args.auto
                 )
                 success = video_mash.mash()
 
@@ -156,7 +162,7 @@ def get_apple_photos_movies(dbfile=None, albums=None):
     # Filter out None results
     videos = [video for video in videos if video is not None]
     paths = []
-
+    print(len(videos))
     for video in videos:
         path = None
         if video.hasadjustments:

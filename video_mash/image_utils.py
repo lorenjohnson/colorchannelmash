@@ -5,10 +5,6 @@ import dlib
 from skimage import img_as_ubyte
 from sklearn.cluster import KMeans
 
-# cv2.COLORMAP_HOT
-def apply_colormap(image, colormap=cv2.COLORMAP_OCEAN):
-    return cv2.applyColorMap(image, colormap)
-
 def resize_and_crop(frame, target_height=None, target_width=None, rotate_fit=False):
     try:
         # frame = image_utils.zoom_image_on_face(frame)
@@ -59,26 +55,6 @@ def resize_and_crop(frame, target_height=None, target_width=None, rotate_fit=Fal
     except Exception as e:
         print(f"Error in resize_and_crop_source_frame: {e}")
         return None
-
-def mjpeg_compression(image, quality=1):
-    """
-    Apply MJPEG compression to the input image.
-    
-    Parameters:
-        image (numpy.ndarray): Input image in OpenCV format (BGR).
-        quality (int): JPEG quality parameter (0-100), where 0 is the lowest quality and 100 is the highest (default: 1).
-    
-    Returns:
-        numpy.ndarray: Compressed image in OpenCV format (BGR).
-    """
-    # Convert image to JPEG with specified quality
-    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
-    _, result = cv2.imencode('.jpg', image, encode_param)
-    
-    # Convert JPEG data back to a image
-    result = cv2.imdecode(result, cv2.IMREAD_COLOR)
-    
-    return result
 
 def zoom_image_on_face(image, zoom_percentage=20, preview=False):
     detector = dlib.get_frontal_face_detector()
@@ -144,7 +120,6 @@ def keep_color_channels_separated(image):
         return quantized_image
 
     raise ValueError("Unsupported array dimensionality. Only 2D and 3D arrays are supported.")
-
 
 def keep_color_channels_separated_alt(image):
     if image.ndim == 3:

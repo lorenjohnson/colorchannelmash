@@ -1,7 +1,8 @@
-Feature: Save last settings used and use as defaults on next run
+Feature: Save last settings used and use as defaults on next run. OR Save Settings?
+
 Feature: Look into mashfile starting frame inconsistency? 
 Feature: Make mashfile restore more robust to failures of effects and blend modes...
-Feature: Ctrl-C asks to save file
+Feature: Ctrl-C asks to save file?
 Feature: Explore keep_color_channels_separated color reduction as one stage of alchemic transmformation (for instance can compose more images in later generations once colors have been reduced in individual mashes / images)
 
 Feature: Save Mash data in screenshot file as well
