@@ -73,7 +73,7 @@ def apply(mode_name, provided_image, new_image, layer_index, opacity=0.5):
 
     return image
 
-def _generate_blend_modes_list():
+def construct_blend_modes_list():
     # Get a list of all functions that end with '_effect' from the current frame
     # blend_modes_members = inspect.getmembers(inspect.currentframe().f_back)
     # blend_mode_names = [name[:-len('_blend_mode')] for name, obj in blend_modes_members if inspect.isfunction(obj) and name.endswith('_blend_mode')]
@@ -93,7 +93,7 @@ def _generate_blend_modes_list():
 
     return blend_mode_names + blend_modes_from_module
 
-BLEND_MODES = _generate_blend_modes_list()
+BLEND_MODES = construct_blend_modes_list()
 
 
 
