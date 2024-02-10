@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import blend_modes as blend_modes_module
+from blendmodes.blend import blendLayers, BlendType
 
 def channels_blend_mode(image, new_image, channel_index):
     """
@@ -34,7 +34,7 @@ def apply(mode_name, provided_image, new_image, layer_index, opacity=0.5):
 
     if provided_image is None:
         # Handle blank initial image
-        if mode_name in ['channels', 'multiply']:
+        if mode_name in ['channels']:
             # Black Image
             image = np.zeros_like(new_image)
         elif mode_name in ['add', 'lighten_only']:
@@ -51,30 +51,20 @@ def apply(mode_name, provided_image, new_image, layer_index, opacity=0.5):
 
     if blend_mode_function is not None and callable(blend_mode_function):
         image = blend_mode_function(image, new_image, channel_index)
-    elif hasattr(blend_modes_module, mode_name) and callable(getattr(blend_modes_module, mode_name)):
+    elif getattr(BlendType, mode_name.upper()) is not None:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
-        image = image.astype(float)
-
         new_image = cv2.cvtColor(new_image, cv2.COLOR_BGR2BGRA)
-        new_image = new_image.astype(float)
 
-        blend_mode = getattr(blend_modes_module, mode_name)
-        image = blend_mode(image, new_image, opacity)
+        image = blendLayers(image, new_image, getattr(BlendType, mode_name.upper()), opacity)
+
+        image = np.array(image)
+        image = cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
         
-        image = image[:, :, :3]
-        image = image.astype(np.uint8)
-        
-        # NOTE: Not necessary to convert new_image back at this time
-        # new_image = new_image[:, :, :3]
-        # new_image = new_image.astype(np.uint8)
+        # # NOTE: Not necessary to convert the new_image back at this time
+        # # new_image = new_image.astype(np.uint8)
     else:
         print(f"Blend mode function not found for mode: {mode_name}. Images not blended!")
 
     return image
 
-BLEND_MODES = [
-    'channels', 'accumulate',
-    # from module
-    'soft_light', 'lighten_only', 'dodge', 'addition', 'darken_only', 'multiply', 'hard_light',
-    'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal'
-    ]
+BLEND_MODES = [ 'channels', 'accumulate' ] + [blend_type.name.lower() for blend_type in BlendType]

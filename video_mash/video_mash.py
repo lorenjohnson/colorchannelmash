@@ -115,6 +115,7 @@ class VideoMash:
                 if layer_index == 0:
                     raise ExitException
                 layer_index -= 1
+                cv2.destroyAllWindows()
                 continue
             # Space - shows next source option for this layer
             elif key == ord(' '):
