@@ -1,3 +1,4 @@
+Feature: Optionally allow each layer to have its own blend mode and opacity
 Bug: Back out of a render to recompose. Crashes on metadata write, but probably because file doesn't close properly
 Feature: Make window full screen with F
 

@@ -75,6 +75,12 @@ class VideoSource:
         self.current_frame = frame
         return frame
 
+    def get_current_frame_or_next(self):
+        if self.current_frame is None:
+            return self.get_frame()
+        else:
+            return self.current_frame
+
     def preprocess(self, layer_index, temp_dir):
         source_filename = os.path.basename(self.source_path)  # Get the filename of the source
 

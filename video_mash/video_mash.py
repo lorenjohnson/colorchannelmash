@@ -81,7 +81,6 @@ class VideoMash:
             self.mode = random.choice(blend_modes.BLEND_MODES)
         return self.selected_sources
 
-
     def select_layers(self):
         layer_index = max(len(self.selected_sources) - 1, 0)
 
@@ -98,19 +97,19 @@ class VideoMash:
             current_mash = self.preview_layers(layer_index)
 
             window_title = f"Layer {layer_index}: (Space) Next Option | (Enter) Select | (Esc) Go back layer | (s) Start render | (c) Switch to Webcam"
-            cv2.namedWindow(window_title, cv2.WINDOW_NORMAL)
+            cv2.namedWindow(window_title)
+            cv2.setWindowProperty(window_title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             cv2.imshow(window_title, current_mash)
-            cv2.resizeWindow(window_title, 1280, 720)
+
+            # cv2.resizeWindow(window_title, 1280, 720)
             key = cv2.waitKey(0) & 0xFF
 
             # Enter - select current image as the layer and moves to next layer selection
             if key == 13:
-                cv2.destroyAllWindows()
                 layer_index += 1
                 continue
             # Esc - goes back a layer removing the previously selected source for that layer
             elif key == 27:
-                cv2.destroyAllWindows()
                 source = self.selected_sources.pop()
                 source.release()
                 if layer_index == 0:
@@ -119,7 +118,6 @@ class VideoMash:
                 continue
             # Space - shows next source option for this layer
             elif key == ord(' '):
-                cv2.destroyAllWindows()
                 self.selected_sources[layer_index].release()
                 del self.selected_sources[layer_index]
                 continue
@@ -131,8 +129,9 @@ class VideoMash:
                 webcam_capture_output = self.webcam_capture.capture_and_save_webcam()
                 self.selected_sources[layer_index] = VideoSource(webcam_capture_output, video_mash=self, starting_frame=0)
                 continue
+            elif key == ord('f'):
+                cv2.setWindowProperty(window_title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             elif key == ord('d'):
-                cv2.destroyAllWindows()
                 self.reset()
                 self.random_sources(self.auto)
                 continue
@@ -146,26 +145,24 @@ class VideoMash:
             # "m" - Cycle Blend Modes (all layers)
             elif key == ord('m'):
                 self.get_next_mode()
-            # ',' Cycle blending opacity (all layers)
+            # ',' Cycle blend opacity (all layers)
             elif key == ord(','):
                 self.opacity = (self.opacity + 0.1) % 1.0
-            else:
-                # "e" - Next Effect
-                if key == ord('e'):
-                    self.get_next_effect()
-                elif key == ord('0'):
-                    self.effects = []
-                    print(self.effects)
-                elif ord('1') <= key <= ord('8'):
-                    effect_index = key - ord('1') # Adjust the index to match the list
-                    # self.effects.append(effects.EFFECTS[effect_index])                    
-                    if effects.EFFECTS[effect_index] in self.effects:
-                        self.effects.remove(effects.EFFECTS[effect_index])
-                    else:
-                        self.effects.append(effects.EFFECTS[effect_index])
-                    print(self.effects)
+            # "e" - Next Effect
+            elif key == ord('e'):
+                self.get_next_effect()
+            elif key == ord('0'):
+                self.effects = []
+            elif ord('1') <= key <= ord('8'):
+                effect_index = key - ord('1') # Adjust the index to match the list
+                # self.effects.append(effects.EFFECTS[effect_index])                    
+                if effects.EFFECTS[effect_index] in self.effects:
+                    self.effects.remove(effects.EFFECTS[effect_index])
                 else:
-                    print(key)
+                    self.effects.append(effects.EFFECTS[effect_index])
+                print(self.effects)
+            else:
+                print(key)
 
         return self.selected_sources
 
@@ -178,8 +175,7 @@ class VideoMash:
 
             if index < len(self.selected_sources):
                 source = self.selected_sources[index]
-                frame = source.get_frame() if source.current_frame is None else source.current_frame
-                frame = source.process_frame(frame)
+                frame = source.get_current_frame_or_next()
                 mashed_frame = self.mash_frames(previous_mash, frame, index)
 
         return mashed_frame
@@ -240,14 +236,13 @@ class VideoMash:
                 for _ in range(total_frames):
                     mashed_frame = None
 
-                    for index, video_source in enumerate(self.selected_sources):
-                        current_frame = video_source.get_frame()
+                    for index, source in enumerate(self.selected_sources):
+                        current_frame = source.get_frame()
 
                         if current_frame is None:
                             continue
 
                         mashed_frame = self.mash_frames(mashed_frame, current_frame, index)
-                        video_source.starting_frame += 1
 
                     writer.write(mashed_frame)
                     bar()
@@ -269,10 +264,10 @@ class VideoMash:
             self.reset()
 
     def preview_frame(self, frame):
-        rendering_title = "(Esc) Pause | (d) Stop and Delete | (k) Stop and Keep"
-        cv2.namedWindow(rendering_title, cv2.WINDOW_NORMAL)
-        cv2.imshow(rendering_title, frame)
-        cv2.resizeWindow(rendering_title, 1280, 720)
+        window_title = "(Esc) Pause | (d) Stop and Delete | (k) Stop and Keep"
+        cv2.namedWindow(window_title)
+        cv2.setWindowProperty(window_title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.imshow(window_title, frame)
         key = cv2.waitKey(1)
 
         if key ==  ord('d'):

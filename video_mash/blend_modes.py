@@ -73,7 +73,7 @@ def apply(mode_name, provided_image, new_image, layer_index, opacity=0.5):
     return image
 
 BLEND_MODES = [
-    'channels', 'accumulate'
+    'channels', 'accumulate',
     # from module
     'soft_light', 'lighten_only', 'dodge', 'addition', 'darken_only', 'multiply', 'hard_light',
     'difference', 'subtract', 'grain_extract', 'grain_merge', 'divide', 'overlay', 'normal'
