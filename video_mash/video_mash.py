@@ -145,13 +145,15 @@ class VideoMash:
                 break
             # "m" - Cycle Blend Modes (all layers)
             elif key == ord('m'):
-                self.get_next_mode()
+                self.cycle_blend_mode()
+            elif key == ord('M'):
+                self.cycle_blend_mode(True)
             # ',' Cycle blend opacity (all layers)
             elif key == ord(','):
                 self.opacity = (self.opacity + 0.1) % 1.0
             # "e" - Next Effect
             elif key == ord('e'):
-                self.get_next_effect()
+                self.cycle_effect()
             elif key == ord('0'):
                 self.effects = []
             elif ord('1') <= key <= ord('8'):
@@ -198,18 +200,20 @@ class VideoMash:
         print(f"Frame saved as {screenshot_path}")
 
 
-    def get_next_effect(self):
+    def cycle_effect(self, backward=False):
         effects_count = len(self.effects)
         current_index = effects.EFFECT_COMBOS.index(self.effects) if effects_count > 0 and self.effects in effects.EFFECT_COMBOS else 0
-        next_index = (current_index + 1) % len(effects.EFFECT_COMBOS)
+        direction = -1 if backward else 1
+        next_index = (current_index + direction) % len(effects.EFFECT_COMBOS)
         self.effects = effects.EFFECT_COMBOS[next_index]
         print(f"Effects: {self.effects}")
 
         return self.effects
 
-    def get_next_mode(self):
+    def cycle_blend_mode(self, backward=False):
         current_index = blend_modes.BLEND_MODES.index(self.mode)
-        next_index = (current_index + 1) % len(blend_modes.BLEND_MODES)
+        direction = -1 if backward else 1
+        next_index = (current_index + direction) % len(blend_modes.BLEND_MODES)
         self.mode = blend_modes.BLEND_MODES[next_index]
         print(f"Mode: {self.mode}")
         return self.mode
