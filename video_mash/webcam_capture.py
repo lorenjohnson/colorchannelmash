@@ -3,6 +3,8 @@ import cv2
 import os
 import numpy as np
 
+from . import image_utils
+
 class WebcamCapture:
     def __init__(self, width, height, fps, seconds):
         self.width = width
@@ -30,6 +32,11 @@ class WebcamCapture:
 
         while True:
             ret, frame = cap.read()
+
+            if not ret:
+                break
+
+            frame = image_utils.resize_and_crop(frame, self.height, self.width)
             frames.append(frame)
             cv2.imshow("Webcam Preview - (q) to stop recording", frame)
 
