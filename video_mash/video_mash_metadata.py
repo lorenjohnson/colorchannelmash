@@ -18,6 +18,7 @@ def write(video_mash):
         "mode": video_mash.mode,
         "effects": effects,
         "fps": video_mash.fps,
+        "colormap": video_mash.colormap,
         "script_version": __version__ if '__version__' in globals() else "Unknown"
     }
 
@@ -67,6 +68,7 @@ def read(file_path):
                 mash_data['height'] = int(metatags.get('height'))
                 mash_data['effects'] = list(map(str, metatags.get('effects').split(',')))
                 mash_data['fps'] = float(metatags.get('fps'))
+                mash_data['colormap'] = metatags.get('colormap')
                 # Parsing out extra characters from when mode was an array
                 mash_data['mode'] = metatags.get('mode').replace("'", "").strip("[]")
 

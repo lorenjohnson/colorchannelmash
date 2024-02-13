@@ -7,6 +7,7 @@ from alive_progress import alive_bar
 
 from . import blend_modes
 from . import effects
+from . import colormaps
 from . import video_mash_metadata
 from .video_source import VideoSource, FileOpenException
 from .webcam_capture import WebcamCapture
@@ -27,6 +28,7 @@ class VideoMash:
             'mode': 'multiply',
             # TODO: Implement effects, currently only color_mode
             'effects': ['rgb'],
+            'colormap': None,
             # TODO: Currently ignored
             'brightness': 0.45,
             'contrast': 0.2,
@@ -63,6 +65,7 @@ class VideoMash:
                 self.effects = mash_data.get('effects')
                 self.mode = mash_data.get('mode')
                 self.fps = mash_data.get('fps')
+                self.colormap = mash_data.get('colormap')
                 for index, source_path in enumerate(mash_data.get('source_paths')):
                     starting_frame = mash_data.get('starting_frames')[index]
                     self.selected_sources.append(
@@ -143,6 +146,9 @@ class VideoMash:
             elif key == ord('s'):
                 cv2.destroyAllWindows()
                 break
+            # "l" - Cycle LUTs / Colormaps (all layers)
+            elif key == ord('l'):
+                self.cycle_colormap()
             # "m" - Cycle Blend Modes (all layers)
             elif key == ord('m'):
                 self.cycle_blend_mode()
@@ -154,16 +160,8 @@ class VideoMash:
             # "e" - Next Effect
             elif key == ord('e'):
                 self.cycle_effect()
-            elif key == ord('0'):
-                self.effects = []
-            elif ord('1') <= key <= ord('8'):
-                effect_index = key - ord('1') # Adjust the index to match the list
-                # self.effects.append(effects.EFFECTS[effect_index])                    
-                if effects.EFFECTS[effect_index] in self.effects:
-                    self.effects.remove(effects.EFFECTS[effect_index])
-                else:
-                    self.effects.append(effects.EFFECTS[effect_index])
-                print(self.effects)
+            elif ord('0') <= key <= ord('8'):
+                self.apply_effect(key)
             else:
                 print(key)
 
@@ -199,6 +197,17 @@ class VideoMash:
         cv2.imwrite(str(screenshot_path), mashed_frame)
         print(f"Frame saved as {screenshot_path}")
 
+    def cycle_colormap(self, backward=False):
+        if self.colormap is None:
+            next_colormap = list(colormaps.COLORMAPS.keys())[0]
+        else:
+            current_index = list(colormaps.COLORMAPS.keys()).index(self.colormap)
+            direction = -1 if backward else 1
+            colormap_keys = list(colormaps.COLORMAPS.keys())
+            next_index = (current_index + direction) % len(colormap_keys)
+            next_colormap = colormap_keys[next_index]
+        self.colormap = next_colormap
+        print(f"Colormap: {next_colormap}")
 
     def cycle_effect(self, backward=False):
         effects_count = len(self.effects)
@@ -208,16 +217,25 @@ class VideoMash:
         self.effects = effects.EFFECT_COMBOS[next_index]
         print(f"Effects: {self.effects}")
 
-        return self.effects
-
     def cycle_blend_mode(self, backward=False):
         current_index = blend_modes.BLEND_MODES.index(self.mode)
         direction = -1 if backward else 1
         next_index = (current_index + direction) % len(blend_modes.BLEND_MODES)
         self.mode = blend_modes.BLEND_MODES[next_index]
         print(f"Mode: {self.mode}")
-        return self.mode
-
+    
+    def apply_effect(self, key):
+        if key == ord('0'):
+            self.effects = []
+        else:
+            effect_index = key - ord('1') # Adjust the index to match the list
+            # self.effects.append(effects.EFFECTS[effect_index])      
+            if effects.EFFECTS[effect_index] in self.effects:
+                self.effects.remove(effects.EFFECTS[effect_index])
+            else:
+                self.effects.append(effects.EFFECTS[effect_index])
+        print(f"Effects: {self.effects}")
+    
     def mash(self):
         try:
             # Randomly select source videos and channel indices
@@ -310,6 +328,9 @@ class VideoMash:
 
         for effect in self.effects:
             mashed_frame = effects.apply(effect, mashed_frame)
+
+        if (self.colormap):
+            mashed_frame = colormaps.apply(mashed_frame, self.colormap)
 
         return mashed_frame
 
