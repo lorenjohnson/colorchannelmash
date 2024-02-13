@@ -67,4 +67,6 @@ def apply(mode_name, provided_image, new_image, layer_index, opacity=0.5):
 
     return image
 
-BLEND_MODES = [ 'channels', 'accumulate' ] + [blend_type.name.lower() for blend_type in BlendType]
+blendmodes_lib_types = [blend_type.name.lower() for blend_type in BlendType if blend_type.name.lower() not in ['destin', 'destout', 'destatop', 'srcatop', 'saturation', 'hue']]
+
+BLEND_MODES = [ 'channels', 'accumulate' ] + blendmodes_lib_types
