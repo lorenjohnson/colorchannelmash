@@ -82,6 +82,7 @@ class VideoMash:
             self.selected_sources.append(current_source)
             self.effects = random.choice(effects.EFFECT_COMBOS)
             self.mode = random.choice(blend_modes.BLEND_MODES)
+            self.colormap = random.choice(list(colormaps.COLORMAPS.keys()))
         return self.selected_sources
 
     def select_layers(self):
@@ -207,7 +208,7 @@ class VideoMash:
             next_index = (current_index + direction) % len(colormap_keys)
             next_colormap = colormap_keys[next_index]
         self.colormap = next_colormap
-        print(f"Colormap: {next_colormap}")
+        print(f"LUT: {self.colormap}")
 
     def cycle_effect(self, backward=False):
         effects_count = len(self.effects)

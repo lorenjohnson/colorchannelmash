@@ -4,21 +4,21 @@ def rgb_effect(image):
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
 def hsv_effect(image):
-  return cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-  
+    return cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
 def hsl_effect(image):
-  return cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
-  
+    return cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
+
 def yuv_effect(image):
-  return cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+    return cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
 
 def gray_effect(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
 
 def invert_effect(image):
-  image[:, :, :] = 255 - image[:, :, :]
-  return image
+    image[:, :, :] = 255 - image[:, :, :]
+    return image
 
 def jpeg_effect(image, quality=45):
     """
@@ -39,9 +39,6 @@ def jpeg_effect(image, quality=45):
     result = cv2.imdecode(result, cv2.IMREAD_COLOR)
     
     return result
-
-def ocean_effect(image):
-  return cv2.applyColorMap(image, cv2.COLORMAP_OCEAN)
 
 def apply(effect_name, image):
     # Construct the name of the function dynamically
