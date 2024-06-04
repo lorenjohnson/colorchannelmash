@@ -7,3 +7,6 @@ source_sets
 __pycache__
 osxphotos_crash.log
 gen*
+bin
+lib
+pyvenv.cfg
