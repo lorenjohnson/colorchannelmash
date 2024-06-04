@@ -30,6 +30,9 @@ def apply(mode_name, provided_image, new_image, layer_index, opacity=0.5):
     Returns:
         numpy.ndarray: The resulting image after applying the blend mode.
     """
+    if provided_image is None:
+        return new_image
+
     channel_index = layer_index % 3    
 
     if provided_image is None:
