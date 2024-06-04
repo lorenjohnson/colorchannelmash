@@ -6,6 +6,7 @@ import cv2
 import osxphotos
 from pathlib import Path
 from video_mash import VideoMash, ExitException, EFFECTS, EFFECT_COMBOS, BLEND_MODES
+from video_mash.video_mash_metadata import read as read_metadata  # Importing the read function from VideoMashMeta
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Video Masher: A memory machine.")
@@ -108,12 +109,20 @@ def main():
         source_paths = get_apple_photos_movies(albums=args.albums)
     elif args.osxphotos is not None:
         source_paths = get_apple_photos_movies(args.osxphotos, args.albums)
-
     else:
-        if len(args.sourceGlob) == 1 and args.sourceGlob[0].endswith('.txt'):
-            txt_file_path = args.sourceGlob[0]
-            with open(txt_file_path, 'r') as file:
-                source_paths = [line.strip() for line in file if line.strip()]
+        if len(args.sourceGlob) == 1:
+            source = args.sourceGlob[0]
+            if source.endswith('.txt'):
+                with open(source, 'r') as file:
+                    source_paths = [line.strip() for line in file if line.strip()]
+            elif os.path.isfile(source) and source.lower().endswith(('.mp4', '.mov', '.avi', '.mkv')):
+                metadata = read_metadata(source)
+                if metadata and 'source_paths' in metadata:
+                    source_paths = metadata['source_paths']
+                else:
+                    source_paths = [source]
+            else:
+                source_paths = glob.glob(source)
         else:
             for source_glob in args.sourceGlob:
                 source_paths.extend(glob.glob(source_glob))

@@ -2,7 +2,6 @@ import os
 import cv2
 import random
 import shutil
-
 from alive_progress import alive_bar
 from . import image_utils
 
@@ -15,8 +14,9 @@ class GetFrameException(Exception):
 class VideoSource:
     _instances = {}  # Class-level dictionary to store VideoSource instances
 
-    def __init__(self, source_path, video_mash = None, starting_frame=None):
+    def __init__(self, source_path, video_mash=None, starting_frame=None):
         self.source_path = source_path
+        self.is_image = source_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff'))
         instance = self.create_or_get_instance(source_path, starting_frame)
         self.cap = instance.cap
         self.preprocessed_cap = None
@@ -25,7 +25,7 @@ class VideoSource:
         self.total_frames = instance.total_frames
         self.starting_frame = instance.starting_frame
         self.video_mash = video_mash
-        if not starting_frame:
+        if not starting_frame and not self.is_image:
             # Set starting_frame to a random valid point in the clip
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, random.randint(0, self.total_frames - 1))
 
@@ -43,14 +43,27 @@ class VideoSource:
         # Separate method to handle instance creation
         instance = cls.__new__(cls)
         instance.source_path = source_path
-        instance.cap = cv2.VideoCapture(source_path)
-        if not instance.cap.isOpened():
-            raise FileOpenException(f"Error opening video file: {source_path}")
-        instance.total_frames = int(instance.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        instance.is_image = source_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff'))
+        if instance.is_image:
+            instance.cap = None
+            instance.total_frames = 1
+        else:
+            instance.cap = cv2.VideoCapture(source_path)
+            if not instance.cap.isOpened():
+                raise FileOpenException(f"Error opening video file: {source_path}")
+            instance.total_frames = int(instance.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         instance.starting_frame = starting_frame if starting_frame is not None else random.randint(0, instance.total_frames - 1)
         return instance
 
     def get_frame(self, starting_frame=None, preprocessing=False):
+        if self.is_image:
+            frame = cv2.imread(self.source_path)
+            if frame is None:
+                raise GetFrameException(f"Error reading image file: {self.source_path}")
+            frame = self.process_frame(frame)
+            self.current_frame = frame
+            return frame
+
         cap = self.preprocessed_cap if self.preprocessed_cap else self.cap
 
         if starting_frame:
@@ -82,6 +95,10 @@ class VideoSource:
             return self.current_frame
 
     def preprocess(self, layer_index, temp_dir):
+        if self.is_image:
+            print("Preprocessing is not applicable for images.")
+            return False
+
         source_filename = os.path.basename(self.source_path)  # Get the filename of the source
 
         # Append "-resized" before the prefix and create a VideoWriter
@@ -137,6 +154,7 @@ class VideoSource:
                 shutil.rmtree(os.path.dirname(self.preprocessed_source_path))
             except FileNotFoundError:
                 # Ignore the error if the directory was already deleted
-                pass        # Remove instance from the dictionary if exists
+                pass        
+        # Remove instance from the dictionary if exists
         if self.source_path in self._instances:
             del self._instances[self.source_path]
