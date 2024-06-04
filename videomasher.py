@@ -108,9 +108,15 @@ def main():
         source_paths = get_apple_photos_movies(albums=args.albums)
     elif args.osxphotos is not None:
         source_paths = get_apple_photos_movies(args.osxphotos, args.albums)
+
     else:
-        for source_glob in args.sourceGlob:
-            source_paths.extend(glob.glob(source_glob))
+        if len(args.sourceGlob) == 1 and args.sourceGlob[0].endswith('.txt'):
+            txt_file_path = args.sourceGlob[0]
+            with open(txt_file_path, 'r') as file:
+                source_paths = [line.strip() for line in file if line.strip()]
+        else:
+            for source_glob in args.sourceGlob:
+                source_paths.extend(glob.glob(source_glob))
 
     if not source_paths:
         print(f"No video files found using the provided sourceGlob: {args.sourceGlob}")
