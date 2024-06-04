@@ -1,4 +1,31 @@
 import cv2
+import numpy as np
+
+def shuffle_effect(image, horizontal_shuffle_prob=0.2, vertical_shuffle_prob=0.02, max_band_size=1000):
+    # Get the height and width of the image
+    height, width = image.shape[:2]
+    
+    # Create a copy of the original image
+    shuffled_image = image.copy()
+    
+    # Shuffle horizontal bands
+    y = 0
+    while y < height:
+        band_height = np.random.randint(1, max_band_size + 1)
+        if np.random.rand() < horizontal_shuffle_prob:
+            np.random.shuffle(shuffled_image[y:min(y+band_height, height)])
+        y += band_height
+    
+    # Shuffle vertical bands
+    x = 0
+    while x < width:
+        band_width = np.random.randint(1, max_band_size + 1)
+        if np.random.rand() < vertical_shuffle_prob:
+            for i in range(height):
+                np.random.shuffle(shuffled_image[i, x:min(x+band_width, width)])
+        x += band_width
+    
+    return shuffled_image
 
 def rgb_effect(image):
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -67,6 +94,7 @@ print("EFFECTS list:", EFFECTS)
 
 EFFECT_COMBOS = [
     [],
+    ['shuffle'],
     ['hsl', 'yuv', 'invert'],
     ['hsl', 'rgb'],
     ['invert', 'hsv', 'rgb'],
