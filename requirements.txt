@@ -260,6 +260,7 @@ trio==0.22.2
 trio-websocket==0.10.3
 uritemplate==4.1.1
 urllib3==1.26.16
+vidgear[asyncio]
 wcwidth==0.2.13
 wrapt==1.16.0
 wsproto==1.2.0

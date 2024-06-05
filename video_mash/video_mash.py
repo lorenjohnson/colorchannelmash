@@ -3,6 +3,7 @@ import tempfile
 
 import cv2
 import numpy as np
+from vidgear.gears import WriteGear
 from alive_progress import alive_bar
 
 from . import blend_modes
@@ -115,7 +116,7 @@ class VideoMash:
             # Esc - goes back a layer removing the previously selected source for that layer
             elif key == 27:
                 source = self.selected_sources.pop()
-                source.release()
+                source.stop()
                 if layer_index == 0:
                     raise ExitException
                 layer_index -= 1
@@ -123,14 +124,14 @@ class VideoMash:
                 continue
             # Space - shows next source option for this layer
             elif key == ord(' '):
-                self.selected_sources[layer_index].release()
+                self.selected_sources[layer_index].stop()
                 del self.selected_sources[layer_index]
                 continue
             # "c" - Source from webcam
             elif key == ord('c'):
                 print("beginning capture from webcam")
                 cv2.destroyAllWindows()
-                self.selected_sources[layer_index].release()
+                self.selected_sources[layer_index].stop()
                 webcam_capture_output = self.webcam_capture.capture_and_save_webcam()
                 self.selected_sources[layer_index] = VideoSource(webcam_capture_output, video_mash=self, starting_frame=0)
                 continue
@@ -247,8 +248,9 @@ class VideoMash:
             for selected_source in self.selected_sources:
                 print(selected_source.source_path)
             # try:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            writer = cv2.VideoWriter(str(self.output_path), fourcc, self.fps, (self.width, self.height), isColor=True)
+            # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            # writer = cv2.VideoWriter(str(self.output_path), fourcc, self.fps, (self.width, self.height), isColor=True)
+            writer = WriteGear(output = str(self.output_path))
         
             # Calculate the number of frames needed for the desired duration
             total_frames = int(self.fps * self.seconds)
@@ -278,7 +280,7 @@ class VideoMash:
                         elif preview_result == False:
                             return False
 
-            writer.release()
+            writer.close()
             cv2.destroyAllWindows()
             video_mash_metadata.write(self)
 
@@ -338,7 +340,7 @@ class VideoMash:
     def reset(self):
         # Release original sources
         for selected_source in self.selected_sources:
-            selected_source.release()
+            selected_source.stop()
         self.selected_sources = []
 
     # Source Preprocessing
