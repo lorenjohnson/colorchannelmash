@@ -10,3 +10,4 @@ gen*
 bin
 lib
 pyvenv.cfg
+share
