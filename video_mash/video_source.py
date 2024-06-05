@@ -2,6 +2,8 @@ import os
 import cv2
 import random
 import shutil
+from vidgear.gears import CamGear
+from vidgear.gears import WriteGear
 from alive_progress import alive_bar
 from . import image_utils
 
@@ -25,9 +27,9 @@ class VideoSource:
         self.total_frames = instance.total_frames
         self.starting_frame = instance.starting_frame
         self.video_mash = video_mash
-        if not starting_frame and not self.is_image:
-            # Set starting_frame to a random valid point in the clip
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, random.randint(0, self.total_frames - 1))
+        # if not starting_frame and not self.is_image:
+        #     # Set starting_frame to a random valid point in the clip
+        #     self.cap.stream.set(cv2.CAP_PROP_POS_FRAMES, random.randint(0, self.total_frames - 1))
 
     @classmethod
     def create_or_get_instance(cls, source_path, starting_frame=None):
@@ -48,10 +50,10 @@ class VideoSource:
             instance.cap = None
             instance.total_frames = 1
         else:
-            instance.cap = cv2.VideoCapture(source_path)
-            if not instance.cap.isOpened():
+            instance.cap = CamGear(source_path).start()
+            if not instance.cap.stream.isOpened():
                 raise FileOpenException(f"Error opening video file: {source_path}")
-            instance.total_frames = int(instance.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            instance.total_frames = int(instance.cap.stream.get(cv2.CAP_PROP_FRAME_COUNT))
         instance.starting_frame = starting_frame if starting_frame is not None else random.randint(0, instance.total_frames - 1)
         return instance
 
@@ -66,17 +68,18 @@ class VideoSource:
 
         cap = self.preprocessed_cap if self.preprocessed_cap else self.cap
 
-        if starting_frame:
-            starting_frame %= self.total_frames
-            cap.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
-        ret, frame = cap.read()
+        # if starting_frame:
+        #     starting_frame %= self.total_frames
+        #     cap.stream.set(cv2.CAP_PROP_POS_FRAMES, starting_frame)
 
-        if ret and frame is None:
+        frame = cap.read()
+
+        if frame is None:
             print('no frame (1st instance)', self.source_path, self.starting_frame)
 
-        if not ret and not preprocessing:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ret, frame = cap.read()
+        if frame is None and not preprocessing:
+            # cap.stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            frame = cap.read()
         
         # TODO: If fails here, try and figure out why
         if frame is None:
@@ -104,9 +107,10 @@ class VideoSource:
         # Append "-resized" before the prefix and create a VideoWriter
         temp_file_path = os.path.join(temp_dir, f"{source_filename}-resized_temp_video_{layer_index}.mp4")
         
-        # Initialize VideoCapture to read the video file
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(temp_file_path, fourcc, self.video_mash.fps, (self.video_mash.width, self.video_mash.height), isColor=True)
+        # Initialize CamGear to write the video file
+        # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        # writer = cv2.VideoWriter(temp_file_path, fourcc, self.video_mash.fps, (self.video_mash.width, self.video_mash.height), isColor=True)
+        writer = WriteGear(output = temp_file_path)
 
         total_frames = int(self.video_mash.fps * self.video_mash.seconds)
         with alive_bar(total_frames) as bar:
@@ -124,12 +128,12 @@ class VideoSource:
                 writer.write(processed_frame)
                 bar()
 
-        self.cap.release()
-        writer.release()
+        self.cap.stop()
+        writer.close()
         
         shutil.copystat(self.source_path, temp_file_path)
         self.preprocessed_source_path = temp_file_path
-        self.preprocessed_cap = cv2.VideoCapture(self.preprocessed_source_path)
+        self.preprocessed_cap = CamGear(self.preprocessed_source_path).start()
 
         return True
 
@@ -144,11 +148,11 @@ class VideoSource:
         # frame = image_utils.apply_colormap(frame)
         return frame
 
-    def release(self):
-        if self.cap: self.cap.release()
+    def stop(self):
+        if self.cap: self.cap.stop()
         # Release and delete preprocessed
         if self.preprocessed_cap:
-            self.preprocessed_cap.release()
+            self.preprocessed_cap.stop()
             try:
                 # Attempt to remove the directory
                 shutil.rmtree(os.path.dirname(self.preprocessed_source_path))

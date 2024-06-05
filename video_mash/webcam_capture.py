@@ -2,6 +2,7 @@ from typing import List
 import cv2
 import os
 import numpy as np
+from vidgear.gears import CamGear
 
 from . import image_utils
 
@@ -21,7 +22,7 @@ class WebcamCapture:
         self.output_filename = os.path.join(cwd, 'source', f'webcam-{webcam_output_count:03d}.mp4')
 
     def capture_and_save_webcam(self):
-        cap = cv2.VideoCapture(0)
+        cap = CamGear(0).start()
 
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
@@ -31,9 +32,9 @@ class WebcamCapture:
         frames = []
 
         while True:
-            ret, frame = cap.read()
+            frame = cap.read()
 
-            if not ret:
+            if frame is None:
                 break
 
             frame = image_utils.resize_and_crop(frame, self.height, self.width)
@@ -49,7 +50,7 @@ class WebcamCapture:
                 break
 
         cv2.destroyAllWindows()
-        cap.release()
+        cap.stop()
 
         webcam_video = np.array(frames)
         self.save_webcam_capture(webcam_video)
@@ -60,4 +61,4 @@ class WebcamCapture:
         writer = cv2.VideoWriter(str(self.output_filename), cv2.VideoWriter_fourcc(*'mp4v'), self.fps, (self.width, self.height))
         for frame in frames:
             writer.write(frame)
-        writer.release()
+        writer.close()
